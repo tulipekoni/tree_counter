@@ -5,8 +5,6 @@ import os
 from utils.arg_parser import parse_preprocess_args
 PIL.Image.MAX_IMAGE_PIXELS = 1262080000
 
-
-
 def split_image(image_array, padding, cols=4):
     """
     Splits the image into 4 vertical columns (A, B, C, D) after removing padding.

@@ -16,7 +16,7 @@ from models.IndivBlur import IndivBlur
 from datasets.tree_counting_dataset import TreeCountingDataset
 from torch.utils.data import DataLoader
 from torch.utils.data.dataloader import default_collate
-
+import matplotlib.pyplot as plt
 
 def train_collate(batch):
     transposed_batch = list(zip(*batch))
@@ -49,6 +49,12 @@ class MyTrainer(Trainer):
     def __init__(self, config):
         super().__init__(config)
         self.config = config
+        self.train_losses = []
+        self.val_losses = []
+        self.train_rmses = []
+        self.train_maes = []
+        self.val_rmses = []
+        self.val_maes = []
 
     def setup(self):
         """
@@ -140,6 +146,8 @@ class MyTrainer(Trainer):
         self.best_loss = np.inf
         self.best_epoch = 0
 
+        self.fig, (self.ax1, self.ax2, self.ax3) = plt.subplots(3, 1, figsize=(10, 15))
+
     def train(self):
         """training process"""
         config = self.config
@@ -148,11 +156,24 @@ class MyTrainer(Trainer):
             logging.info('-'*5 + 'Epoch {}/{}'.format(epoch, config['max_epoch'] - 1) + '-'*5)
             
             self.epoch = epoch
-            self.train_epoch(epoch)
+            train_loss, train_rmse, train_mae = self.train_epoch(epoch)
             
             # Validate if epoch matches the right interval
             if epoch % config['val_epoch'] == 0 and epoch >= config['val_start']:
-                self.val_epoch()
+                val_loss, val_rmse, val_mae = self.val_epoch()
+                self.val_losses.append(val_loss)
+                self.val_rmses.append(val_rmse)
+                self.val_maes.append(val_mae)
+            else:
+                self.val_losses.append(None)
+                self.val_rmses.append(None)
+                self.val_maes.append(None)
+
+            self.train_losses.append(train_loss)
+            self.train_rmses.append(train_rmse)
+            self.train_maes.append(train_mae)
+
+            self.update_and_save_graphs()
 
     def train_epoch(self, epoch=0):
         epoch_loss = AverageMeter()
@@ -222,6 +243,7 @@ class MyTrainer(Trainer):
                 save_dict['refiner_optimizer_state_dict'] = self.refiner_optimizer.state_dict()
             torch.save(save_dict, save_path)
 
+        return epoch_loss.get_avg(), epoch_rmse.get_avg(), epoch_mae.get_avg()
 
     def val_epoch(self):
         epoch_start = time.time()
@@ -229,17 +251,31 @@ class MyTrainer(Trainer):
         if self.config['use_indivblur']:
             self.refiner.eval()
         epoch_res = []
+        epoch_loss = 0
 
         for inputs, points in self.dataloaders['val']:
             inputs = inputs.to(self.device)
+            points = [p.to(self.device) for p in points]  # Move points to device
 
-            # For flexibility, consider if the batch size > 1 is possible or required
             assert inputs.size(0) == 1, 'The batch size should equal to 1 in validation mode'
 
             with torch.set_grad_enabled(False):
                 outputs = self.model(inputs)
-                points = points[0].type(torch.LongTensor)
-                res = len(points) - torch.sum(outputs).item()
+                
+                # Generate ground truth density maps
+                if self.config['use_indivblur']:
+                    pred = self.refiner(points, inputs, outputs.shape)
+                else:
+                    pred = self.kernel_generator.generate_density_map(points, outputs.shape)
+                
+                # Compute loss
+                loss = self.criterion(outputs, pred)
+                epoch_loss += loss.item()
+
+                # Calculate difference between predicted and actual count
+                pre_count = outputs.sum().item()
+                gt_count = len(points[0])
+                res = gt_count - pre_count
                 epoch_res.append(res)
 
         # Convert to numpy array for metric calculation
@@ -250,8 +286,8 @@ class MyTrainer(Trainer):
         mae = np.mean(np.abs(epoch_res))
 
         # Logging RMSE and MAE
-        logging.info('Epoch {} validation, RMSE: {:.2f} MAE: {:.2f}, Cost {:.1f} sec'
-                     .format(self.epoch, rmse, mae, time.time() - epoch_start))
+        logging.info('Epoch {} validation, Loss: {:.2f}, RMSE: {:.2f} MAE: {:.2f}, Cost {:.1f} sec'
+                     .format(self.epoch, epoch_loss, rmse, mae, time.time() - epoch_start))
 
         # If this is the best result so far
         if (rmse + mae) < (self.best_rmse + self.best_mae):
@@ -259,7 +295,8 @@ class MyTrainer(Trainer):
             self.best_mae = mae
             self.best_epoch = self.epoch
 
-            logging.info("Saving best validation model. RMSE {:.2f} MAE {:.2f} epoch {}".format(self.best_rmse, self.best_mae, self.epoch))
+            logging.info("Saving best validation model. RMSE {:.2f} MAE {:.2f} epoch {}"
+                         .format(self.best_rmse, self.best_mae, self.epoch))
 
             save_path = os.path.join(self.save_dir, f'best_checkpoint_epoch_{self.epoch}.tar')
             self.list_of_saved_valuation_models.append(save_path)  # Control the number of saved models
@@ -273,6 +310,51 @@ class MyTrainer(Trainer):
                 save_dict['refiner_state_dict'] = self.refiner.state_dict()
                 save_dict['refiner_optimizer_state_dict'] = self.refiner_optimizer.state_dict()
             torch.save(save_dict, save_path)
+
+        return epoch_loss, rmse, mae
+
+    def update_and_save_graphs(self):
+        epochs = range(self.start_epoch, self.epoch + 1)
+
+        # Update loss graph
+        self.ax1.clear()
+        self.ax1.plot(epochs, self.train_losses, label='Train Loss')
+        self.ax1.plot(epochs, self.val_losses, label='Val Loss')
+        self.ax1.set_xlabel('Epoch')
+        self.ax1.set_ylabel('Loss')
+        self.ax1.legend()
+        self.ax1.set_title('Training and Validation Loss')
+
+        # Update RMSE graph
+        self.ax2.clear()
+        self.ax2.plot(epochs, self.train_rmses, label='Train RMSE')
+        self.ax2.plot(epochs, self.val_rmses, label='Val RMSE')
+        self.ax2.set_xlabel('Epoch')
+        self.ax2.set_ylabel('RMSE')
+        self.ax2.legend()
+        self.ax2.set_title('Training and Validation RMSE')
+
+        # Update MAE graph
+        self.ax3.clear()
+        self.ax3.plot(epochs, self.train_maes, label='Train MAE')
+        self.ax3.plot(epochs, self.val_maes, label='Val MAE')
+        self.ax3.set_xlabel('Epoch')
+        self.ax3.set_ylabel('MAE')
+        self.ax3.legend()
+        self.ax3.set_title('Training and Validation MAE')
+
+        self.fig.tight_layout()
+        self.fig.savefig(os.path.join(self.save_dir, 'training_graphs.png'))
+
+        # Save values to npy file
+        np.save(os.path.join(self.save_dir, 'training_values.npy'), {
+            'train_losses': self.train_losses,
+            'val_losses': self.val_losses,
+            'train_rmses': self.train_rmses,
+            'val_rmses': self.val_rmses,
+            'train_maes': self.train_maes,
+            'val_maes': self.val_maes
+        })
 
 def cos_loss(output, target):
     B = output.shape[0]

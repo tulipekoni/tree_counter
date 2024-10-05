@@ -59,7 +59,7 @@ python train.py
 You can override config parameters using command-line arguments:
 
 ```
-python train.py  --override data_dir ./new_data_path lr 1e-4
+python train.py  --override data_dir=./new_data_path lr=1e-4
 ```
 
 ## Testing
