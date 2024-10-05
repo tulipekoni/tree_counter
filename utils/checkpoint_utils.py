@@ -20,7 +20,7 @@ def find_checkpoint_file(folder_path: str) -> str:
             return os.path.join(folder_path, file)
     raise FileNotFoundError(f"No checkpoint file found in {folder_path}")
 
-def load_checkpoint(checkpoint_path: str) -> Tuple[Dict[str, Any], Optional[Dict[str, Any]], Dict[str, Any], Optional[Dict[str, Any]], int, int]:
+def load_checkpoint(checkpoint_path: str) -> Tuple[Dict[str, Any], Optional[Dict[str, Any]], Dict[str, Any], Optional[Dict[str, Any]], Optional[Dict[str, Any]], Optional[Dict[str, Any]], int, int]:
     """
     Load a checkpoint file.
 
@@ -33,6 +33,8 @@ def load_checkpoint(checkpoint_path: str) -> Tuple[Dict[str, Any], Optional[Dict
         - refiner_state_dict (Optional[Dict[str, Any]]): State dict of the refiner (if present).
         - optimizer_state_dict (Dict[str, Any]): State dict of the optimizer.
         - refiner_optimizer_state_dict (Optional[Dict[str, Any]]): State dict of the refiner optimizer (if present).
+        - lr_scheduler_state_dict (Optional[Dict[str, Any]]): State dict of the learning rate scheduler (if present).
+        - refiner_lr_scheduler_state_dict (Optional[Dict[str, Any]]): State dict of the refiner learning rate scheduler (if present).
         - kernel_size (int): Kernel size used in the checkpoint.
         - epoch (int): Epoch number of the checkpoint.
 
@@ -48,13 +50,17 @@ def load_checkpoint(checkpoint_path: str) -> Tuple[Dict[str, Any], Optional[Dict
     refiner_state_dict = checkpoint.get('refiner_state_dict')
     optimizer_state_dict = checkpoint['optimizer_state_dict']
     refiner_optimizer_state_dict = checkpoint.get('refiner_optimizer_state_dict')
+    lr_scheduler_state_dict = checkpoint.get('lr_scheduler_state_dict')
+    refiner_lr_scheduler_state_dict = checkpoint.get('refiner_lr_scheduler_state_dict')
     kernel_size = checkpoint['kernel_size']
     epoch = checkpoint['epoch']
 
-    return model_state_dict, refiner_state_dict, optimizer_state_dict, refiner_optimizer_state_dict, kernel_size, epoch
+    return model_state_dict, refiner_state_dict, optimizer_state_dict, refiner_optimizer_state_dict, lr_scheduler_state_dict, refiner_lr_scheduler_state_dict, kernel_size, epoch
 
 def save_checkpoint(save_dir: str, model: torch.nn.Module, optimizer: torch.optim.Optimizer, 
+                    lr_scheduler: Optional[torch.optim.lr_scheduler._LRScheduler] = None,
                     refiner: Optional[torch.nn.Module] = None, refiner_optimizer: Optional[torch.optim.Optimizer] = None, 
+                    refiner_lr_scheduler: Optional[torch.optim.lr_scheduler._LRScheduler] = None,
                     kernel_size: int = 0, epoch: int = 0) -> str:
     """
     Save a checkpoint.
@@ -63,8 +69,10 @@ def save_checkpoint(save_dir: str, model: torch.nn.Module, optimizer: torch.opti
         save_dir (str): Directory to save the checkpoint.
         model (torch.nn.Module): The model to save.
         optimizer (torch.optim.Optimizer): The optimizer to save.
+        lr_scheduler (Optional[torch.optim.lr_scheduler._LRScheduler]): The learning rate scheduler to save.
         refiner (Optional[torch.nn.Module]): The refiner model to save (if present).
         refiner_optimizer (Optional[torch.optim.Optimizer]): The refiner optimizer to save (if present).
+        refiner_lr_scheduler (Optional[torch.optim.lr_scheduler._LRScheduler]): The refiner learning rate scheduler to save.
         kernel_size (int): Kernel size to save.
         epoch (int): Current epoch number.
 
@@ -81,10 +89,15 @@ def save_checkpoint(save_dir: str, model: torch.nn.Module, optimizer: torch.opti
         'epoch': epoch
     }
     
+    if lr_scheduler is not None:
+        checkpoint['lr_scheduler_state_dict'] = lr_scheduler.state_dict()
+    
     if refiner is not None:
         checkpoint['refiner_state_dict'] = refiner.state_dict()
     if refiner_optimizer is not None:
         checkpoint['refiner_optimizer_state_dict'] = refiner_optimizer.state_dict()
+    if refiner_lr_scheduler is not None:
+        checkpoint['refiner_lr_scheduler_state_dict'] = refiner_lr_scheduler.state_dict()
     
     torch.save(checkpoint, checkpoint_path)
     return checkpoint_path

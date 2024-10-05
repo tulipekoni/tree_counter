@@ -90,12 +90,14 @@ class MyTrainer(Trainer):
         }
         
         if config['resume']:
-            model_state_dict, refiner_state_dict, optimizer_state_dict, refiner_optimizer_state_dict, resume_kernel_size, resume_epoch = load_checkpoint(config['resume'])
+            model_state_dict, refiner_state_dict, optimizer_state_dict, refiner_optimizer_state_dict, lr_scheduler_state_dict, refiner_lr_scheduler_state_dict, resume_kernel_size, resume_epoch = load_checkpoint(config['resume'])
         else:
             model_state_dict = None
             refiner_state_dict = None
             optimizer_state_dict = None
             refiner_optimizer_state_dict = None
+            lr_scheduler_state_dict = None
+            refiner_lr_scheduler_state_dict = None
             resume_kernel_size = config['kernel_size']
             resume_epoch = 0
 
@@ -124,14 +126,34 @@ class MyTrainer(Trainer):
         # Setup optimizer
         self.optimizer = optim.Adam(params, lr=config['lr'], weight_decay=config['weight_decay'])
 
+        # Setup learning rate scheduler
+        self.lr_scheduler = None
+        self.refiner_lr_scheduler = None
+        if self.config['use_lr_decay']:
+            self.lr_scheduler = torch.optim.lr_scheduler.StepLR(
+                self.optimizer, 
+                step_size=self.config['lr_decay_epoch'], 
+                gamma=self.config['lr_decay']
+            )
+            if self.config['use_indivblur']:
+                self.refiner_lr_scheduler = torch.optim.lr_scheduler.StepLR(
+                    self.refiner_optimizer, 
+                    step_size=self.config['lr_decay_epoch'], 
+                    gamma=self.config['lr_decay']
+                )
+
         # Resume from checkpoint (if applicable)
         self.start_epoch = 0
         if config['resume']:
             self.model.load_state_dict(model_state_dict)
             self.optimizer.load_state_dict(optimizer_state_dict)
+            if self.lr_scheduler and lr_scheduler_state_dict:
+                self.lr_scheduler.load_state_dict(lr_scheduler_state_dict)
             if config['use_indivblur'] and refiner_state_dict is not None:
                 self.refiner.load_state_dict(refiner_state_dict)
                 self.refiner_optimizer.load_state_dict(refiner_optimizer_state_dict)
+                if self.refiner_lr_scheduler and refiner_lr_scheduler_state_dict:
+                    self.refiner_lr_scheduler.load_state_dict(refiner_lr_scheduler_state_dict)
             self.start_epoch = resume_epoch + 1
 
         self.criterion = torch.nn.MSELoss(reduction='sum')
@@ -174,6 +196,14 @@ class MyTrainer(Trainer):
             self.train_maes.append(train_mae)
 
             self.update_and_save_graphs()
+
+            if self.config['use_lr_decay']:
+                self.lr_scheduler.step()
+                if self.config['use_indivblur']:
+                    self.refiner_lr_scheduler.step()
+            
+                current_lr = self.lr_scheduler.get_last_lr()[0]
+                logging.info(f'Current learning rate: {current_lr}')
 
     def train_epoch(self, epoch=0):
         epoch_loss = AverageMeter()

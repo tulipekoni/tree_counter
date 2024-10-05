@@ -15,5 +15,8 @@
     "num_workers": 4,
     "downsample": 1,
     "cos_loss_weight": 10,
-    "use_indivblur": false
+    "use_indivblur": false,
+    "lr_decay": 0.5,
+    "lr_decay_epoch": 50,
+    "use_lr_decay": true
 }
