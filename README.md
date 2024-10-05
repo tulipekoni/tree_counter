@@ -1,41 +1,85 @@
-# Kernel-based Density Map Generation for Dense Object Counting
+# Kernel-based Density Map Generation for dense tree counting
 
-## Data preparation
+This project implements a kernel-based density map generation method for dense object counting, specifically applied to tree counting in aerial images.
+
+## Features
+
+- Utilizes a U-Net architecture for density map prediction
+- Implements both Gaussian kernel and IndivBlur methods for ground truth generation
+- Supports training, validation, and testing phases
+- Includes visualization tools for density maps
+
+## Installation
+
+1. Clone the repository:
+
+   ```
+   git clone https://github.com/your-username/kernel-based-density-map.git
+   cd kernel-based-density-map
+   ```
+
+2. Install the required packages:
+   ```
+   pip install -r requirements.txt
+   ```
+
+## Data Preparation
+
+1. Download the Yosemite Tree Dataset from [this link](https://drive.google.com/drive/folders/1NWAqslICPoTS8OvT8zosI0R7cmsl6x9j).
+
+2. Preprocess the dataset:
+   ```
+   python preprocess_dataset.py --origin_dir <path_to_original_data> --data_dir <path_to_processed_data>
+   ```
 
 ## Pretrained model
 
 The pretrained model can be downloaded from [GoogleDrive](https://drive.google.com/drive/folders/1TaY5I1eHIt7pm2YBfqw4BfnpX2l3Bof4?usp=sharing).
 
-### Prepare
+## Training
 
-1、 Download Yosemite Tree Dataset [link](https://drive.google.com/drive/folders/1NWAqslICPoTS8OvT8zosI0R7cmsl6x9j)
-
-2、 Pre-Process Data (split large image and split train/validation)
+To train the model, run:
 
 ```
-python preprocess_dataset.py --origin_dir <directory of original data> --data_dir <directory of processed data>
+python train.py
 ```
 
-3、 Train model (validate on single GTX Titan X)
-
-## Test
+You can override config parameters using command-line arguments:
 
 ```
-python test.py --data-dir ./data --save-dir ./checkpoints/model.pth --net csrnet --device 0
+python train.py  --override data_dir ./new_data_path lr 1e-4
 ```
 
-## Train
+## Testing
+
+To test the model:
 
 ```
-
-python train.py --net vgg19 --data-dir PATH_TO_DATASET --save-dir PATH_TO_CHECKPOINT
-
+python test.py --model_folder ./path_to_model_folder
 ```
 
-### Citation
+## Configuration
 
-If you use our code or models in your research, please cite with:
+The `config.json` file contains all the hyperparameters and settings for the model. You can modify this file to change the model's behavior. Key parameters include:
+
+## Project Structure
+
+- `models/`: Contains the U-Net and IndivBlur model implementations
+- `datasets/`: Includes the TreeCountingDataset class
+- `utils/`: Helper functions and classes for training and evaluation
+- `train.py`: Main script for training the model
+- `test.py`: Script for evaluating the model on the test set
+- `test_visualize.py`: Script for visualizing density maps
+
+## Citation
+
+If you use this code in your research, please cite:
 
 ```
-
+@article{your-paper,
+title={Kernel-based Density Map Generation for Dense Object Counting},
+author={Your Name},
+journal={Your Journal},
+year={2024}
+}
 ```

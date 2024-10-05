@@ -3,16 +3,17 @@ from PIL import Image
 import numpy as np
 import os
 import argparse
+from utils.arg_parser import parse_preprocess_args
 PIL.Image.MAX_IMAGE_PIXELS = 1262080000
 
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Preprocess large z20 images and generate .mat files for annotations.')
-    parser.add_argument('--data-path', default='z20_data.png', help='Path to the large data image (both data and label should be in the same folder).')
+    parser.add_argument('--data-path', default='./data', help='Path to the large data image (both data and label should be in the same folder).')
     parser.add_argument('--save-dir', default='./processed_data', help='Directory to save processed patches and .mat files.')
     parser.add_argument('--max-images', type=int, default=None, help='Maximum number of images to process per region. Default is all.')
-    parser.add_argument('--block-size', type=int, default=240, help='Size of the training images.')
-    parser.add_argument('--val-split', type=float, default=0.2, help='Percentage of the training data to use for validation.')
+    parser.add_argument('--block-size', type=int, default=320, help='Size of the training images.')
+    parser.add_argument('--val-split', type=float, default=0, help='Percentage of the training data to use for validation.')
     return parser.parse_args()
 
 
@@ -90,20 +91,11 @@ def save_patches(patches, region_name, save_dir, is_val=False):
         npy_save_path = patch_save_path.replace('.png', '.npy')
         np.save(npy_save_path, object_positions) 
 
-        # Recreate image from object positions
-        object_image = np.zeros_like(label_patch)
-        object_image[object_positions[:, 0], object_positions[:, 1]] = 255  
-
-        # Save the object position image
-        object_image_save_path = os.path.join(args.save_dir + '/points', f'{region_name}_{patch_type}_patch_{patch_count}.png')
-        object_image_pil = Image.fromarray(object_image)
-        object_image_pil.save(object_image_save_path)
-
         patch_count += 1
 
 
 if __name__ == '__main__':
-    args = parse_args()
+    args = parse_preprocess_args()
 
     # Load the large images
     data_path = args.data_path
@@ -129,9 +121,6 @@ if __name__ == '__main__':
     if not os.path.exists(args.save_dir):
         os.makedirs(args.save_dir)
         
-    if not os.path.exists(args.save_dir + '/points'):
-        os.makedirs(args.save_dir + '/points')
-
     # Process each region and save patches and .mat files
     for i, region_name in enumerate(['A', 'B', 'C', 'D']):
         save_dir = os.path.join(args.save_dir, regions[region_name])

@@ -9,6 +9,7 @@ from torch import optim
 import torch.utils.data.dataloader
 import logging
 import numpy as np
+from typing import Tuple
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 from models.unet import Unet
 from models.IndivBlur import IndivBlur
@@ -23,7 +24,7 @@ def train_collate(batch):
     y = transposed_batch[1]  # the number of points is not fixed, keep it as a list of tensor
     return x, y
 
-def load_checkpoint(checkpoint_path):
+def load_checkpoint(checkpoint_path: str) -> Tuple[dict, dict, dict, dict, int, int]:
     suffix = checkpoint_path.rsplit('.', 1)[-1]
     
     if suffix == 'tar':
@@ -37,9 +38,29 @@ def load_checkpoint(checkpoint_path):
         return model, refiner, optimizer, refiner_optimizer, kernel_size, start_epoch
 
 class MyTrainer(Trainer):
+    """
+    A custom trainer class for tree counting model.
+
+    This class handles the setup, training, and validation processes for the tree counting model.
+    It includes methods for loading data, initializing the model and optimizers, and running
+    training and validation epochs.
+    """
+
+    def __init__(self, config):
+        super().__init__(config)
+        self.config = config
+
     def setup(self):
-        """Initializes datasets, model, refiner, loss, and optimizer."""
-        args = self.args
+        """
+        Initializes datasets, model, refiner, loss, and optimizer.
+
+        This method sets up the training environment, including:
+        - Setting the device (GPU or CPU)
+        - Loading and preparing datasets
+        - Initializing the model, refiner (if used), and optimizers
+        - Setting up the loss function
+        """
+        config = self.config
 
         # Setup device (GPU or CPU)
         if torch.cuda.is_available():
@@ -53,40 +74,40 @@ class MyTrainer(Trainer):
             logging.info('Using CPU')
         
         self.datasets = {
-            'train': TreeCountingDataset(root_path=os.path.join(args.data_dir, 'train')),
-            'val': TreeCountingDataset(root_path=os.path.join(args.data_dir, 'val')),
+            'train': TreeCountingDataset(root_path=os.path.join(config['data_dir'], 'train')),
+            'val': TreeCountingDataset(root_path=os.path.join(config['data_dir'], 'val')),
         }
         
         self.dataloaders = {
-            'train': DataLoader(self.datasets['train'], batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers, pin_memory=True, collate_fn=train_collate),
-            'val': DataLoader(self.datasets['val'], batch_size=1, shuffle=False, num_workers=args.num_workers, collate_fn=default_collate),
+            'train': DataLoader(self.datasets['train'], batch_size=config['batch_size'], shuffle=True, num_workers=config['num_workers'], pin_memory=True, collate_fn=train_collate),
+            'val': DataLoader(self.datasets['val'], batch_size=1, shuffle=False, num_workers=config['num_workers'], collate_fn=default_collate),
         }
         
-        if args.resume:
-            model_state_dict, refiner_state_dict, optimizer_state_dict, refiner_optimizer_state_dict, resume_kernel_size, resume_epoch = load_checkpoint(args.resume)
+        if config['resume']:
+            model_state_dict, refiner_state_dict, optimizer_state_dict, refiner_optimizer_state_dict, resume_kernel_size, resume_epoch = load_checkpoint(config['resume'])
         else:
             model_state_dict = None
             refiner_state_dict = None
             optimizer_state_dict = None
             refiner_optimizer_state_dict = None
-            resume_kernel_size = args.kernel_size
+            resume_kernel_size = config['kernel_size']
             resume_epoch = 0
 
-        self.kernel_size = resume_kernel_size if args.resume else args.kernel_size
+        self.kernel_size = resume_kernel_size if config['resume'] else config['kernel_size']
 
         # Model setup
         self.model = Unet()
 
         # Check if IndivBlur is used
-        if args.use_indivblur:
-            self.refiner = IndivBlur(kernel_size=self.kernel_size, softmax=args.softmax, downsample=args.downsample)
+        if config['use_indivblur']:
+            self.refiner = IndivBlur(kernel_size=self.kernel_size, softmax=config['softmax'], downsample=config['downsample'])
             self.refiner.to(self.device)
             refiner_params = list(self.refiner.parameters())
-            self.refiner_optimizer = optim.Adam(refiner_params, lr=args.lr, weight_decay=args.weight_decay)
+            self.refiner_optimizer = optim.Adam(refiner_params, lr=config['lr'], weight_decay=config['weight_decay'])
         else:
             self.refiner = None
             self.refiner_optimizer = None
-            self.kernel_generator = GaussianKernel(kernel_size=self.kernel_size, downsample=args.downsample, device=self.device)
+            self.kernel_generator = GaussianKernel(kernel_size=self.kernel_size, downsample=config['downsample'], device=self.device)
 
         # Get params from models
         params = list(self.model.parameters())
@@ -95,14 +116,14 @@ class MyTrainer(Trainer):
         self.model.to(self.device)
 
         # Setup optimizer
-        self.optimizer = optim.Adam(params, lr=args.lr, weight_decay=args.weight_decay)
+        self.optimizer = optim.Adam(params, lr=config['lr'], weight_decay=config['weight_decay'])
 
         # Resume from checkpoint (if applicable)
         self.start_epoch = 0
-        if args.resume:
+        if config['resume']:
             self.model.load_state_dict(model_state_dict)
             self.optimizer.load_state_dict(optimizer_state_dict)
-            if args.use_indivblur and refiner_state_dict is not None:
+            if config['use_indivblur'] and refiner_state_dict is not None:
                 self.refiner.load_state_dict(refiner_state_dict)
                 self.refiner_optimizer.load_state_dict(refiner_optimizer_state_dict)
             self.start_epoch = resume_epoch + 1
@@ -110,8 +131,8 @@ class MyTrainer(Trainer):
         self.criterion = torch.nn.MSELoss(reduction='sum')
 
         # Saving model checkpoints
-        self.list_of_saved_checkpoint_models = Save_Handle(max_num=args.max_model_num)
-        self.list_of_saved_valuation_models = Save_Handle(max_num=args.max_model_num)
+        self.list_of_saved_checkpoint_models = Save_Handle(max_num=config['max_model_num'])
+        self.list_of_saved_valuation_models = Save_Handle(max_num=config['max_model_num'])
         
         # Track best model performance during validation
         self.best_mae = np.inf
@@ -121,16 +142,16 @@ class MyTrainer(Trainer):
 
     def train(self):
         """training process"""
-        args = self.args
+        config = self.config
         
-        for epoch in range(self.start_epoch, args.max_epoch):
-            logging.info('-'*5 + 'Epoch {}/{}'.format(epoch, args.max_epoch - 1) + '-'*5)
+        for epoch in range(self.start_epoch, config['max_epoch']):
+            logging.info('-'*5 + 'Epoch {}/{}'.format(epoch, config['max_epoch'] - 1) + '-'*5)
             
             self.epoch = epoch
             self.train_epoch(epoch)
             
             # Validate if epoch matches the right interval
-            if epoch % args.val_epoch == 0 and epoch >= args.val_start:
+            if epoch % config['val_epoch'] == 0 and epoch >= config['val_start']:
                 self.val_epoch()
 
     def train_epoch(self, epoch=0):
@@ -139,7 +160,7 @@ class MyTrainer(Trainer):
         epoch_rmse = AverageMeter()  # To track RMSE
         epoch_start = time.time()
         self.model.train() 
-        if self.args.use_indivblur:
+        if self.config['use_indivblur']:
             self.refiner.train()    
 
         # Iterate over data
@@ -150,26 +171,26 @@ class MyTrainer(Trainer):
 
             with torch.set_grad_enabled(True):
                 self.optimizer.zero_grad()
-                if self.args.use_indivblur:
+                if self.config['use_indivblur']:
                     self.refiner_optimizer.zero_grad()
 
                 # Forward pass through model
                 outputs = self.model(x)  # Predict
 
                 # Generate ground truth density maps
-                if self.args.use_indivblur:
+                if self.config['use_indivblur']:
                     pred = self.refiner(y, x, outputs.shape)  # Refine
                 else:
                     pred = self.kernel_generator.generate_density_map(y, outputs.shape)
 
                 # Compute loss (including cos_loss)
                 loss = self.criterion(pred, outputs)
-                loss += self.args.cos_loss_weight * cos_loss(pred, outputs) 
+                loss += self.config['cos_loss_weight'] * cos_loss(pred, outputs) 
                 loss.backward() 
 
                 # Update optimizers
                 self.optimizer.step()
-                if self.args.use_indivblur:
+                if self.config['use_indivblur']:
                     self.refiner_optimizer.step()
 
                 # Calculate predicted count (sum over spatial dimensions) and difference from ground truth
@@ -196,7 +217,7 @@ class MyTrainer(Trainer):
                 'model_state_dict': self.model.state_dict(),
                 'optimizer_state_dict': self.optimizer.state_dict(),
             }
-            if self.args.use_indivblur:
+            if self.config['use_indivblur']:
                 save_dict['refiner_state_dict'] = self.refiner.state_dict()
                 save_dict['refiner_optimizer_state_dict'] = self.refiner_optimizer.state_dict()
             torch.save(save_dict, save_path)
@@ -205,7 +226,7 @@ class MyTrainer(Trainer):
     def val_epoch(self):
         epoch_start = time.time()
         self.model.eval()
-        if self.args.use_indivblur:
+        if self.config['use_indivblur']:
             self.refiner.eval()
         epoch_res = []
 
@@ -248,11 +269,10 @@ class MyTrainer(Trainer):
                 'model_state_dict': self.model.state_dict(),
                 'optimizer_state_dict': self.optimizer.state_dict(),
             }
-            if self.args.use_indivblur:
+            if self.config['use_indivblur']:
                 save_dict['refiner_state_dict'] = self.refiner.state_dict()
                 save_dict['refiner_optimizer_state_dict'] = self.refiner_optimizer.state_dict()
             torch.save(save_dict, save_path)
-
 
 def cos_loss(output, target):
     B = output.shape[0]

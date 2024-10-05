@@ -1,96 +1,85 @@
-import torch
-import os
-import numpy as np
-from datasets.tree_counting_dataset import TreeCountingDataset  
-from models.unet import Unet
 import argparse
-from models.IndivBlur import IndivBlur 
+import os
+import torch
+import json
+from models.unet import Unet
+from datasets.tree_counting_dataset import TreeCountingDataset
+from torch.utils.data import DataLoader
+import numpy as np
 from utils.helper import GaussianKernel
+from models.IndivBlur import IndivBlur
+from utils.config_loader import load_config
+from utils.checkpoint_utils import find_checkpoint_file, load_checkpoint
+from utils.arg_parser import parse_test_args
 
 def parse_args():
-    parser = argparse.ArgumentParser(description='Test')
-    parser.add_argument('--data-dir', default='./processed_data', help='Directory containing the test data.')
-    parser.add_argument('--save-dir', default='./checkpoints/model.pth', help='Path to the saved model.')
-    parser.add_argument('--device', default='0', help='GPU device to use (e.g., "0").')
-    args = parser.parse_args()
-    return args
+    parser = argparse.ArgumentParser(description='Test Tree Counting Model')
+    parser.add_argument('--model_folder', type=str, required=True, help='Path to the folder containing the model checkpoint and config')
+    return parser.parse_args()
 
-def load_model_and_refiner(args, device):
+if __name__ == '__main__':
+    args = parse_test_args()
+
+    # Load config
+    config_path = os.path.join(args.model_folder, 'config.json')
+    config = load_config(config_path)
+
+    # Find and load checkpoint
+    checkpoint_path = find_checkpoint_file(args.model_folder)
+    model_state_dict, refiner_state_dict, _, _, kernel_size, _ = load_checkpoint(checkpoint_path)
+
+    # Setup device
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+    # Initialize model
     model = Unet()
-    checkpoint = torch.load(args.save_dir, map_location=device)
-    kernel_size = checkpoint['kernel_size']
-
-    # Load the model state from the saved checkpoint
-    model.load_state_dict(checkpoint['model_state_dict'])
-
-    # Move the model to the device & set to evaluation mode
+    model.load_state_dict(model_state_dict)
     model.to(device)
     model.eval()
 
-    # Check if 'refiner_state_dict' is in the checkpoint
-    if 'refiner_state_dict' in checkpoint:
-        refiner = IndivBlur(kernel_size=kernel_size, softmax=args.softmax, downsample=1)
-        refiner.load_state_dict(checkpoint['refiner_state_dict'])
+    # Initialize refiner or kernel generator
+    if config['use_indivblur']:
+        refiner = IndivBlur(kernel_size=kernel_size, softmax=config['softmax'], downsample=config['downsample'])
+        refiner.load_state_dict(refiner_state_dict)
         refiner.to(device)
         refiner.eval()
-        use_refiner = True
-        kernel_generator = None
     else:
-        refiner = None
-        use_refiner = False
-        kernel_generator = GaussianKernel(kernel_size=kernel_size, downsample=1, device=device)
+        kernel_generator = GaussianKernel(kernel_size=kernel_size, downsample=config['downsample'], device=device)
 
-    print(use_refiner)
-    return model, refiner, kernel_size, use_refiner, kernel_generator
+    # Load test dataset
+    test_dataset = TreeCountingDataset(root_path=os.path.join(config['data_dir'], 'test'))
+    test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False, num_workers=config['num_workers'])
 
-if __name__ == '__main__':
-    args = parse_args()
+    # Testing loop
+    mae_list = []
+    rmse_list = []
 
-    # Set device
-    device = torch.device(f"cuda:{args.device}" if torch.cuda.is_available() else "cpu")
-    print(f"Using device: {device}")
-
-    # Initialize the dataset and dataloader
-    test_dataset = TreeCountingDataset(root_path=os.path.join(args.data_dir))
-    test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=1, shuffle=False, num_workers=8)
-
-    # Load the model
-    model, refiner, kernel_size, use_refiner, kernel_generator = load_model_and_refiner(args, device)
-
-    # Store the differences between predictions and ground truth
-    epoch_minus = []
-    
-    # Perform inference on the test dataset
     with torch.no_grad():
-        for x, y in test_dataloader:
+        for x, y in test_loader:
             x = x.to(device)
             y = [p.to(device) for p in y]
 
-            assert input.size(0) == 1, 'Batch size should be 1 for testing'
+            # Forward pass
+            outputs = model(x)
 
-            # Forward pass through the model
-            model_prediction = model(input)
-
-            print('use_refiner', use_refiner)
-            if use_refiner:
-                ground_truth = refiner(y, x, model_prediction.shape)
+            # Generate ground truth density maps
+            if config['use_indivblur']:
+                pred = refiner(y, x, outputs.shape)
             else:
-                ground_truth = kernel_generator.generate_density_map(y, model_prediction.shape)
-            
-            # Calculate the difference between the predicted and ground truth counts
-            pred_count = torch.sum(model_prediction).item()
-            true_count = len(ground_truth[0])
-            temp_minu = true_count - pred_count
+                pred = kernel_generator.generate_density_map(y, outputs.shape)
 
-            print(f"Predicted = {pred_count:.2f}, Ground Truth = {true_count}, Difference = {temp_minu:.2f}")
-            epoch_minus.append(temp_minu)
+            # Calculate metrics
+            gt_count = pred.sum().item()
+            pred_count = outputs.sum().item()
+            mae = abs(gt_count - pred_count)
+            rmse = (gt_count - pred_count) ** 2
 
-    # Convert to numpy array
-    epoch_minus = np.array(epoch_minus)
+            mae_list.append(mae)
+            rmse_list.append(rmse)
 
-    # Calculate the Mean Absolute Error (MAE) and Root Mean Squared Error (RMSE)
-    mae = np.mean(np.abs(epoch_minus))
-    rmse = np.sqrt(np.mean(np.square(epoch_minus)))
+    # Calculate final metrics
+    final_mae = np.mean(mae_list)
+    final_rmse = np.sqrt(np.mean(rmse_list))
 
-    # Print final results
-    print(f"Final Test Results: MAE = {mae:.2f}, RMSE = {rmse:.2f}")
+    print(f"Test Results: MAE = {final_mae:.2f}, RMSE = {final_rmse:.2f}")
+

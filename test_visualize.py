@@ -7,19 +7,27 @@ from models.unet import Unet
 import argparse
 from models.IndivBlur import IndivBlur
 from utils.helper import GaussianKernel
+import json
+
+def load_config(config_path):
+    with open(config_path, 'r') as f:
+        return json.load(f)
+
+def find_checkpoint_file(folder_path):
+    for file in os.listdir(folder_path):
+        if file.startswith('checkpoint') and file.endswith('.tar'):
+            return os.path.join(folder_path, file)
+    raise FileNotFoundError(f"No checkpoint file found in {folder_path}")
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Test and visualize the density map.')
-    parser.add_argument('--data-dir', default='./processed_data', help='Directory containing the test data.')
-    parser.add_argument('--save-dir', default='./checkpoints/model.pth', help='Path to the saved model.')
-    parser.add_argument('--device', default='0', help='GPU device to use (e.g., "0").')
-    parser.add_argument('--softmax', type=bool, default=False, help='use softmax')
+    parser.add_argument('--model_folder', type=str, required=True, help='Path to the folder containing the model checkpoint and config')
     args = parser.parse_args()
     return args
 
-def load_model_and_refiner(args, device):
+def load_model_and_refiner(config, checkpoint_path, device):
     model = Unet()
-    checkpoint = torch.load(args.save_dir, map_location=device)
+    checkpoint = torch.load(checkpoint_path, map_location=device)
     kernel_size = checkpoint['kernel_size']
 
     # Load the model state from the saved checkpoint
@@ -31,7 +39,7 @@ def load_model_and_refiner(args, device):
 
     # Check if 'refiner_state_dict' is in the checkpoint
     if 'refiner_state_dict' in checkpoint:
-        refiner = IndivBlur(kernel_size=kernel_size, softmax=args.softmax, downsample=1)
+        refiner = IndivBlur(kernel_size=kernel_size, softmax=config['softmax'], downsample=config['downsample'])
         refiner.load_state_dict(checkpoint['refiner_state_dict'])
         refiner.to(device)
         refiner.eval()
@@ -40,7 +48,7 @@ def load_model_and_refiner(args, device):
     else:
         refiner = None
         use_refiner = False
-        kernel_generator = GaussianKernel(kernel_size=kernel_size, downsample=1, device=device)
+        kernel_generator = GaussianKernel(kernel_size=kernel_size, downsample=config['downsample'], device=device)
 
     return model, refiner, kernel_size, use_refiner, kernel_generator
 
@@ -53,7 +61,7 @@ def visualize_input_and_density(img, model_prediction, ground_truth):
     model_prediction = model_prediction.squeeze().cpu().detach().numpy()
     ground_truth = ground_truth.squeeze().cpu().detach().numpy()
 
-    # Create a figure with 1 row and 4 columns
+    # Create a figure with 1 row and 3 columns
     fig, axes = plt.subplots(1, 3, figsize=(16, 6))
 
     # Plot the input image
@@ -79,15 +87,22 @@ def visualize_input_and_density(img, model_prediction, ground_truth):
 if __name__ == '__main__':
     args = parse_args()
     
+    # Load config
+    config_path = os.path.join(args.model_folder, 'config.json')
+    config = load_config(config_path)
+
+    # Find and load checkpoint
+    checkpoint_path = find_checkpoint_file(args.model_folder)
+
     # Set device (GPU or CPU)
-    device = torch.device(f"cuda:{args.device}" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
 
     # Load the model & refiner from the checkpoint
-    model, refiner, kernel_size, use_refiner, kernel_generator = load_model_and_refiner(args, device)
+    model, refiner, kernel_size, use_refiner, kernel_generator = load_model_and_refiner(config, checkpoint_path, device)
     
     # Load the test dataset
-    test_dataset = TreeCountingDataset(root_path=os.path.join(args.data_dir, 'test'))
+    test_dataset = TreeCountingDataset(root_path=os.path.join(config['data_dir'], 'test'))
     
     # Randomly select a test image from the dataset
     random_idx = random.randint(0, len(test_dataset) - 1)
@@ -96,7 +111,8 @@ if __name__ == '__main__':
     
     # Move the image to the device and add a batch dimension
     x = x.unsqueeze(0).to(device)
-    y = y.unsqueeze(0).to(device)
+    y = [y.to(device)]  # Wrap y in a list to match the expected format
+    
     # Run the model to get the density map
     with torch.no_grad():
         model_prediction = model(x)

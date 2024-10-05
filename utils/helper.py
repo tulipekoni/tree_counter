@@ -48,7 +48,7 @@ class GaussianKernel(object):
         self.device = device
         
         ax = torch.arange(-self.kernel_size // 2 + 1., self.kernel_size // 2 + 1., device=self.device)
-        xx, yy = torch.meshgrid(ax, ax)
+        xx, yy = torch.meshgrid(ax, ax, indexing='ij')
         kernel = torch.exp(-(xx**2 + yy**2) / (2. * self.sigma**2))
         self.gaussian_kernel = kernel / torch.sum(kernel)
      

@@ -1,9 +1,6 @@
 import torch.nn as nn
-import numpy as np
 import torch
-import math
 import torch.nn.functional as F
-from torchvision import models
 
 
 class IndivBlur(nn.Module):
@@ -35,6 +32,10 @@ class IndivBlur(nn.Module):
 
         kernels = self.adapt(batch_img)
 
+        # Normalize the kernels using either softmax or min-max normalization
+        # Softmax: Emphasizes larger values, outputs can be interpreted as probabilities
+        # Non-softmax: Preserves relative differences, simple normalization
+        # The choice affects the emphasis on stronger features and numerical properties
         if self.softmax:
             kernels = F.softmax(kernels, 1)
         else:
