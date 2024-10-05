@@ -2,19 +2,9 @@ import PIL
 from PIL import Image
 import numpy as np
 import os
-import argparse
 from utils.arg_parser import parse_preprocess_args
 PIL.Image.MAX_IMAGE_PIXELS = 1262080000
 
-
-def parse_args():
-    parser = argparse.ArgumentParser(description='Preprocess large z20 images and generate .mat files for annotations.')
-    parser.add_argument('--data-path', default='./data', help='Path to the large data image (both data and label should be in the same folder).')
-    parser.add_argument('--save-dir', default='./processed_data', help='Directory to save processed patches and .mat files.')
-    parser.add_argument('--max-images', type=int, default=None, help='Maximum number of images to process per region. Default is all.')
-    parser.add_argument('--block-size', type=int, default=320, help='Size of the training images.')
-    parser.add_argument('--val-split', type=float, default=0, help='Percentage of the training data to use for validation.')
-    return parser.parse_args()
 
 
 def split_image(image_array, padding, cols=4):

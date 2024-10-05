@@ -25,11 +25,23 @@ This project implements a kernel-based density map generation method for dense o
 
 ## Data Preparation
 
-1. Download the Yosemite Tree Dataset from [this link](https://drive.google.com/drive/folders/1NWAqslICPoTS8OvT8zosI0R7cmsl6x9j).
+1. Download the Yosemite Tree Dataset using the following command:
 
-2. Preprocess the dataset:
    ```
-   python preprocess_dataset.py --origin_dir <path_to_original_data> --data_dir <path_to_processed_data>
+   gdown --folder https://drive.google.com/drive/folders/1NWAqslICPoTS8OvT8zosI0R7cmsl6x9j -O ./data
+   ```
+
+   This command uses the `gdown` tool to download the files from the Google Drive folder to the ./data directory.
+
+2. Install gdown if you haven't already:
+
+   ```
+   pip install gdown
+   ```
+
+3. Preprocess the dataset:
+   ```
+   python preprocess_dataset.py --origin_dir ./data --data_dir <path_to_processed_data>
    ```
 
 ## Pretrained model
