@@ -32,10 +32,11 @@ def parse_preprocess_args() -> argparse.Namespace:
         argparse.Namespace: Parsed arguments
     """
     parser = argparse.ArgumentParser(description='Preprocess Tree Counting Dataset')
-    parser.add_argument('--data_path', type=str, default='./data', required=False, help='Path to the original dataset')
-    parser.add_argument('--save_dir', type=str, default='./processed_data', required=False, help='Directory to save processed data')
-    parser.add_argument('--block_size', type=int, default=320, help='Size of image patches')
-    parser.add_argument('--max_images', type=int, default=None, help='Maximum number of images to process (for debugging)')
+    parser.add_argument('--data_path', type=str, default='./data', required=False, help='Path to the original dataset.')
+    parser.add_argument('--save_dir', type=str, default='./processed_data', required=False, help='Directory to save processed data.')
+    parser.add_argument('--block_size', type=int, default=320, help='Size of image patches.')
+    parser.add_argument('--max_images', type=int, default=None, help='Maximum number of images to process (for debugging).')
+    parser.add_argument('--val-split', type=float, default=0, help='Percentage of the training data to use for validation.')
     return parser.parse_args()
 
 def parse_args_to_config(args: argparse.Namespace) -> Dict[str, Any]:
