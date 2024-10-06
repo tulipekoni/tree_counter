@@ -164,4 +164,4 @@ cython_debug/
 # Custom directories to ease development
 data/
 checkpoints/
-processed_data_*
+processed_data*

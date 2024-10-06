@@ -26,7 +26,7 @@ if __name__ == '__main__':
 
     # Find and load checkpoint
     checkpoint_path = find_checkpoint_file(args.model_folder)
-    model_state_dict, refiner_state_dict, _, _, kernel_size, _ = load_checkpoint(checkpoint_path)
+    model_state_dict, refiner_state_dict, _, _, _, _, kernel_size, _ = load_checkpoint(checkpoint_path)
 
     # Setup device
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')

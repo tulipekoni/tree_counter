@@ -4,6 +4,7 @@ import numpy as np
 import os
 from utils.arg_parser import parse_preprocess_args
 PIL.Image.MAX_IMAGE_PIXELS = 1262080000
+import random
 
 def split_image(image_array, padding, cols=4):
     """
@@ -38,6 +39,9 @@ def process_and_save(image_column, label_column, region_name, save_dir, patch_si
     # Limit the number of patches if max_images is specified
     if max_images is not None:
         patches = patches[:max_images]
+
+    # Shuffle the patches
+    random.shuffle(patches)
 
     # If validation split is needed
     if is_val_split:
