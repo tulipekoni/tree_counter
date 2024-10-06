@@ -15,6 +15,7 @@ from utils.arg_parser import parse_test_args
 def parse_args():
     parser = argparse.ArgumentParser(description='Test Tree Counting Model')
     parser.add_argument('--model_folder', type=str, required=True, help='Path to the folder containing the model checkpoint and config')
+    parser.add_argument('--data_dir', type=str, required=True, help='Path to the directory containing the test data')
     return parser.parse_args()
 
 if __name__ == '__main__':
@@ -46,40 +47,54 @@ if __name__ == '__main__':
     else:
         kernel_generator = GaussianKernel(kernel_size=kernel_size, downsample=config['downsample'], device=device)
 
-    # Load test dataset
-    test_dataset = TreeCountingDataset(root_path=os.path.join(config['data_dir'], 'test'))
-    test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False, num_workers=config['num_workers'])
+    # Load test datasets for regions A and C
+    test_dataset_A = TreeCountingDataset(root_path=os.path.join(args.data_dir, 'test', 'A'))
+    test_dataset_C = TreeCountingDataset(root_path=os.path.join(args.data_dir, 'test', 'C'))
+    
+    test_loader_A = DataLoader(test_dataset_A, batch_size=1, shuffle=False, num_workers=config['num_workers'])
+    test_loader_C = DataLoader(test_dataset_C, batch_size=1, shuffle=False, num_workers=config['num_workers'])
 
-    # Testing loop
-    mae_list = []
-    rmse_list = []
+    # Testing function
+    def test_region(loader, region_name):
+        mae_list = []
+        rmse_list = []
 
-    with torch.no_grad():
-        for x, y in test_loader:
-            x = x.to(device)
-            y = [p.to(device) for p in y]
+        with torch.no_grad():
+            for x, y in loader:
+                x = x.to(device)
+                y = [p.to(device) for p in y]
 
-            # Forward pass
-            outputs = model(x)
+                # Forward pass
+                outputs = model(x)
 
-            # Generate ground truth density maps
-            if config['use_indivblur']:
-                pred = refiner(y, x, outputs.shape)
-            else:
-                pred = kernel_generator.generate_density_map(y, outputs.shape)
+                # Generate ground truth density maps
+                if config['use_indivblur']:
+                    pred = refiner(y, x, outputs.shape)
+                else:
+                    pred = kernel_generator.generate_density_map(y, outputs.shape)
 
-            # Calculate metrics
-            gt_count = pred.sum().item()
-            pred_count = outputs.sum().item()
-            mae = abs(gt_count - pred_count)
-            rmse = (gt_count - pred_count) ** 2
+                # Calculate metrics
+                gt_count = pred.sum().item()
+                pred_count = outputs.sum().item()
+                mae = abs(gt_count - pred_count)
+                rmse = (gt_count - pred_count) ** 2
 
-            mae_list.append(mae)
-            rmse_list.append(rmse)
+                mae_list.append(mae)
+                rmse_list.append(rmse)
 
-    # Calculate final metrics
-    final_mae = np.mean(mae_list)
-    final_rmse = np.sqrt(np.mean(rmse_list))
+        final_mae = np.mean(mae_list)
+        final_rmse = np.sqrt(np.mean(rmse_list))
 
-    print(f"Test Results: MAE = {final_mae:.2f}, RMSE = {final_rmse:.2f}")
+        print(f"Test Results for Region {region_name}: MAE = {final_mae:.2f}, RMSE = {final_rmse:.2f}")
+        return mae_list, rmse_list
+
+    # Test regions A and C separately
+    mae_A, rmse_A = test_region(test_loader_A, 'A')
+    mae_C, rmse_C = test_region(test_loader_C, 'C')
+
+    # Calculate combined results
+    combined_mae = np.mean(mae_A + mae_C)
+    combined_rmse = np.sqrt(np.mean(np.array(rmse_A + rmse_C)))
+
+    print(f"Combined Test Results: MAE = {combined_mae:.2f}, RMSE = {combined_rmse:.2f}")
 
