@@ -39,20 +39,20 @@ if __name__ == '__main__':
     else:
         kernel_generator = GaussianKernel(kernel_size=kernel_size, downsample=config['downsample'], device=device)
 
-    # Load test datasets for regions A and C
-    test_dataset_A = TreeCountingDataset(root_path=os.path.join(args.data_dir, 'test', 'A'))
-    test_dataset_C = TreeCountingDataset(root_path=os.path.join(args.data_dir, 'test', 'C'))
-    
-    test_loader_A = DataLoader(test_dataset_A, batch_size=1, shuffle=False, num_workers=config['num_workers'])
-    test_loader_C = DataLoader(test_dataset_C, batch_size=1, shuffle=False, num_workers=config['num_workers'])
+    # Load test dataset
+    test_dataset = TreeCountingDataset(root_path=os.path.join(args.data_dir, 'test'))
+    test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False, num_workers=config['num_workers'])
 
     # Testing function
-    def test_region(loader, region_name):
+    def test_region(loader, region_prefix):
         mae_list = []
         rmse_list = []
 
         with torch.no_grad():
-            for x, y in loader:
+            for x, y, filename in loader:
+                if not filename[0].startswith(region_prefix):
+                    continue
+
                 x = x.to(device)
                 y = [p.to(device) for p in y]
 
@@ -77,12 +77,12 @@ if __name__ == '__main__':
         final_mae = np.mean(mae_list)
         final_rmse = np.sqrt(np.mean(rmse_list))
 
-        print(f"Test Results for Region {region_name}: MAE = {final_mae:.2f}, RMSE = {final_rmse:.2f}")
+        print(f"Test Results for Region {region_prefix}: MAE = {final_mae:.2f}, RMSE = {final_rmse:.2f}")
         return mae_list, rmse_list
 
     # Test regions A and C separately
-    mae_A, rmse_A = test_region(test_loader_A, 'A')
-    mae_C, rmse_C = test_region(test_loader_C, 'C')
+    mae_A, rmse_A = test_region(test_loader, 'A')
+    mae_C, rmse_C = test_region(test_loader, 'C')
 
     # Calculate combined results
     combined_mae = np.mean(mae_A + mae_C)
