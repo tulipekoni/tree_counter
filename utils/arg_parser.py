@@ -22,6 +22,7 @@ def parse_test_args() -> argparse.Namespace:
     """
     parser = argparse.ArgumentParser(description='Test Tree Counting Model')
     parser.add_argument('--model_folder', type=str, required=True, help='Path to the folder containing the model checkpoint and config')
+    parser.add_argument('--data_dir', type=str, required=True, help='Path to the directory containing the test data')
     return parser.parse_args()
 
 def parse_preprocess_args() -> argparse.Namespace:

@@ -1,7 +1,5 @@
-import argparse
 import os
 import torch
-import json
 from models.unet import Unet
 from datasets.tree_counting_dataset import TreeCountingDataset
 from torch.utils.data import DataLoader
@@ -11,12 +9,6 @@ from models.IndivBlur import IndivBlur
 from utils.config_loader import load_config
 from utils.checkpoint_utils import find_checkpoint_file, load_checkpoint
 from utils.arg_parser import parse_test_args
-
-def parse_args():
-    parser = argparse.ArgumentParser(description='Test Tree Counting Model')
-    parser.add_argument('--model_folder', type=str, required=True, help='Path to the folder containing the model checkpoint and config')
-    parser.add_argument('--data_dir', type=str, required=True, help='Path to the directory containing the test data')
-    return parser.parse_args()
 
 if __name__ == '__main__':
     args = parse_test_args()
