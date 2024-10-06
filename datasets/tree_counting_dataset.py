@@ -35,5 +35,5 @@ class TreeCountingDataset(data.Dataset):
         x = self.trans(Image.open(img_path).convert('RGB'))
         y = np.load(points_path)
 
-        # Return image and keypoints (converted to torch Tensor)
-        return x, torch.from_numpy(y).float()
+        # Return image, keypoints (converted to torch Tensor), and filename
+        return x, torch.from_numpy(y).float(), self.list_of_images[index]
