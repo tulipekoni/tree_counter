@@ -348,28 +348,28 @@ class MyTrainer(Trainer):
 
         # Update loss graph
         self.ax1.clear()
-        self.ax1.plot(epochs, self.train_losses, label='Train Loss')
-        self.ax1.plot(epochs, self.val_losses, label='Val Loss')
+        self.ax1.semilogy(epochs, self.train_losses, label='Train Loss')
+        self.ax1.semilogy(epochs, self.val_losses, label='Val Loss')
         self.ax1.set_xlabel('Epoch')
-        self.ax1.set_ylabel('Loss')
+        self.ax1.set_ylabel('Loss (log scale)')
         self.ax1.legend()
         self.ax1.set_title('Training and Validation Loss')
 
         # Update RMSE graph
         self.ax2.clear()
-        self.ax2.plot(epochs, self.train_rmses, label='Train RMSE')
-        self.ax2.plot(epochs, self.val_rmses, label='Val RMSE')
+        self.ax2.semilogy(epochs, self.train_rmses, label='Train RMSE')
+        self.ax2.semilogy(epochs, self.val_rmses, label='Val RMSE')
         self.ax2.set_xlabel('Epoch')
-        self.ax2.set_ylabel('RMSE')
+        self.ax2.set_ylabel('RMSE (log scale)')
         self.ax2.legend()
         self.ax2.set_title('Training and Validation RMSE')
 
         # Update MAE graph
         self.ax3.clear()
-        self.ax3.plot(epochs, self.train_maes, label='Train MAE')
-        self.ax3.plot(epochs, self.val_maes, label='Val MAE')
+        self.ax3.semilogy(epochs, self.train_maes, label='Train MAE')
+        self.ax3.semilogy(epochs, self.val_maes, label='Val MAE')
         self.ax3.set_xlabel('Epoch')
-        self.ax3.set_ylabel('MAE')
+        self.ax3.set_ylabel('MAE (log scale)')
         self.ax3.legend()
         self.ax3.set_title('Training and Validation MAE')
 
