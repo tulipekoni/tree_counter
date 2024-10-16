@@ -115,7 +115,7 @@ class MyTrainer(Trainer):
         else:
             self.refiner = None
             self.refiner_optimizer = None
-            self.kernel_generator = GaussianKernel(kernel_size=self.kernel_size, downsample=config['downsample'], device=self.device)
+            self.kernel_generator = GaussianKernel(kernel_size=self.kernel_size, downsample=config['downsample'], device=self.device, sigma=config['gaussian_sigma'])
 
         # Get params from models
         params = list(self.model.parameters())

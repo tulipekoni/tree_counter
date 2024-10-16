@@ -48,7 +48,7 @@ def load_model_and_refiner(config, checkpoint_path, device):
     else:
         refiner = None
         use_refiner = False
-        kernel_generator = GaussianKernel(kernel_size=kernel_size, downsample=config['downsample'], device=device)
+        kernel_generator = GaussianKernel(kernel_size=kernel_size, downsample=config['downsample'], device=device, sigma=config['gaussian_sigma'])
 
     return model, refiner, kernel_size, use_refiner, kernel_generator
 
@@ -106,7 +106,7 @@ if __name__ == '__main__':
     
     # Randomly select a test image from the dataset
     random_idx = random.randint(0, len(test_dataset) - 1)
-    x, y = test_dataset[random_idx]
+    x, y, _ = test_dataset[random_idx]
     print(f"Selected random image index: {random_idx}")
     
     # Move the image to the device and add a batch dimension

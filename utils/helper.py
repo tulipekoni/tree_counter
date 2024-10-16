@@ -41,9 +41,9 @@ class AverageMeter(object):
         return self.count
 
 class GaussianKernel(object):
-    def __init__(self, kernel_size, downsample, device):
+    def __init__(self, kernel_size, downsample, device, sigma):
         self.kernel_size = kernel_size
-        self.sigma = kernel_size / 6 # Standard deviation for Gaussian kernel
+        self.sigma = sigma  # Use the sigma from config
         self.downsample = downsample
         self.device = device
         

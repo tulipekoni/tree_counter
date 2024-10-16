@@ -37,7 +37,7 @@ if __name__ == '__main__':
         refiner.to(device)
         refiner.eval()
     else:
-        kernel_generator = GaussianKernel(kernel_size=kernel_size, downsample=config['downsample'], device=device)
+        kernel_generator = GaussianKernel(kernel_size=kernel_size, downsample=config['downsample'], device=device, sigma=config['gaussian_sigma'])
 
     # Load test dataset
     test_dataset = TreeCountingDataset(root_path=os.path.join(args.data_dir, 'test'))
