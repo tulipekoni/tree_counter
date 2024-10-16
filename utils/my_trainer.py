@@ -215,7 +215,7 @@ class MyTrainer(Trainer):
             self.refiner.train()    
 
         # Iterate over data
-        for step, (x, y) in enumerate(self.dataloaders['train']):
+        for step, (x, y, _) in enumerate(self.dataloaders['train']):
             tree_count = np.array([len(p) for p in y], dtype=np.float32)  # Ground truth counts
             x = x.to(self.device) # batch images
             y = [p.to(self.device) for p in y] # batch points
@@ -283,7 +283,7 @@ class MyTrainer(Trainer):
         epoch_res = []
         epoch_loss = 0
 
-        for inputs, points in self.dataloaders['val']:
+        for inputs, points, _ in self.dataloaders['val']:
             inputs = inputs.to(self.device)
             points = [p.to(self.device) for p in points]  # Move points to device
 
