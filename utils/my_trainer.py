@@ -22,7 +22,7 @@ def train_collate(batch):
     transposed_batch = list(zip(*batch))
     x = torch.stack(transposed_batch[0], 0)
     y = transposed_batch[1]  # the number of points is not fixed, keep it as a list of tensor
-    return x, y
+    return x, y, transposed_batch[2]
 
 def load_checkpoint(checkpoint_path: str) -> Tuple[dict, dict, dict, dict, int, int]:
     suffix = checkpoint_path.rsplit('.', 1)[-1]
