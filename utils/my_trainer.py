@@ -17,6 +17,7 @@ from datasets.tree_counting_dataset import TreeCountingDataset
 from torch.utils.data import DataLoader
 from torch.utils.data.dataloader import default_collate
 import matplotlib.pyplot as plt
+import glob
 
 def train_collate(batch):
     transposed_batch = list(zip(*batch))
@@ -24,18 +25,30 @@ def train_collate(batch):
     y = transposed_batch[1]  # the number of points is not fixed, keep it as a list of tensor
     return x, y, transposed_batch[2]
 
-def load_checkpoint(checkpoint_path: str) -> Tuple[dict, dict, dict, dict, int, int]:
-    suffix = checkpoint_path.rsplit('.', 1)[-1]
+def load_checkpoint(checkpoint_path: str) -> Tuple[dict, dict, dict, dict, dict, dict, int, int]:
+    if os.path.isdir(checkpoint_path):
+        # Find the most recent checkpoint file
+        checkpoint_files = glob.glob(os.path.join(checkpoint_path, 'checkpoint_*.tar'))
+        if not checkpoint_files:
+            logging.warning(f"No checkpoint files found in {checkpoint_path}")
+            return None, None, None, None, None, None, None, None
+        checkpoint_path = max(checkpoint_files, key=os.path.getctime)
+        logging.info(f"Loading checkpoint from {checkpoint_path}")
     
-    if suffix == 'tar':
-        checkpoint = torch.load(checkpoint_path, 'cuda' if torch.cuda.is_available() else "cpu")
-        model = checkpoint['model_state_dict']
-        optimizer = checkpoint['optimizer_state_dict']
-        kernel_size = checkpoint['kernel_size']
-        start_epoch = checkpoint['epoch']
-        refiner = checkpoint.get('refiner_state_dict', None)
-        refiner_optimizer = checkpoint.get('refiner_optimizer_state_dict', None)
-        return model, refiner, optimizer, refiner_optimizer, kernel_size, start_epoch
+    if not os.path.exists(checkpoint_path):
+        logging.warning(f"Checkpoint file {checkpoint_path} does not exist")
+        return None, None, None, None, None, None, None, None
+    
+    checkpoint = torch.load(checkpoint_path, 'cuda' if torch.cuda.is_available() else "cpu")
+    model = checkpoint['model_state_dict']
+    optimizer = checkpoint['optimizer_state_dict']
+    kernel_size = checkpoint['kernel_size']
+    start_epoch = checkpoint['epoch']
+    refiner = checkpoint.get('refiner_state_dict', None)
+    refiner_optimizer = checkpoint.get('refiner_optimizer_state_dict', None)
+    lr_scheduler = checkpoint.get('lr_scheduler_state_dict', None)
+    refiner_lr_scheduler = checkpoint.get('refiner_lr_scheduler_state_dict', None)
+    return model, refiner, optimizer, refiner_optimizer, lr_scheduler, refiner_lr_scheduler, kernel_size, start_epoch
 
 class MyTrainer(Trainer):
     """
@@ -90,7 +103,21 @@ class MyTrainer(Trainer):
         }
         
         if config['resume']:
-            model_state_dict, refiner_state_dict, optimizer_state_dict, refiner_optimizer_state_dict, lr_scheduler_state_dict, refiner_lr_scheduler_state_dict, resume_kernel_size, resume_epoch = load_checkpoint(config['resume'])
+            checkpoint_data = load_checkpoint(config['resume'])
+            if checkpoint_data[0] is not None:  # Check if checkpoint was successfully loaded
+                (model_state_dict, refiner_state_dict, optimizer_state_dict, 
+                 refiner_optimizer_state_dict, lr_scheduler_state_dict, 
+                 refiner_lr_scheduler_state_dict, resume_kernel_size, resume_epoch) = checkpoint_data
+            else:
+                logging.warning("Failed to load checkpoint. Starting from scratch.")
+                model_state_dict = None
+                refiner_state_dict = None
+                optimizer_state_dict = None
+                refiner_optimizer_state_dict = None
+                lr_scheduler_state_dict = None
+                refiner_lr_scheduler_state_dict = None
+                resume_kernel_size = config['kernel_size']
+                resume_epoch = 0
         else:
             model_state_dict = None
             refiner_state_dict = None
@@ -267,10 +294,12 @@ class MyTrainer(Trainer):
                 'kernel_size': self.kernel_size,
                 'model_state_dict': self.model.state_dict(),
                 'optimizer_state_dict': self.optimizer.state_dict(),
+                'lr_scheduler_state_dict': self.lr_scheduler.state_dict() if self.lr_scheduler else None,
             }
             if self.config['use_indivblur']:
                 save_dict['refiner_state_dict'] = self.refiner.state_dict()
                 save_dict['refiner_optimizer_state_dict'] = self.refiner_optimizer.state_dict()
+                save_dict['refiner_lr_scheduler_state_dict'] = self.refiner_lr_scheduler.state_dict() if self.refiner_lr_scheduler else None
             torch.save(save_dict, save_path)
 
         return epoch_loss.get_avg(), epoch_rmse.get_avg(), epoch_mae.get_avg()
@@ -335,10 +364,12 @@ class MyTrainer(Trainer):
                 'kernel_size': self.kernel_size,
                 'model_state_dict': self.model.state_dict(),
                 'optimizer_state_dict': self.optimizer.state_dict(),
+                'lr_scheduler_state_dict': self.lr_scheduler.state_dict() if self.lr_scheduler else None,
             }
             if self.config['use_indivblur']:
                 save_dict['refiner_state_dict'] = self.refiner.state_dict()
                 save_dict['refiner_optimizer_state_dict'] = self.refiner_optimizer.state_dict()
+                save_dict['refiner_lr_scheduler_state_dict'] = self.refiner_lr_scheduler.state_dict() if self.refiner_lr_scheduler else None
             torch.save(save_dict, save_path)
 
         return epoch_loss, rmse, mae
