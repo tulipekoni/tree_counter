@@ -3,29 +3,28 @@ import torch
 import torch.nn.functional as F
 
 
-class IndivBlur(nn.Module):
+class Refiner(nn.Module):
     ## learn a kernel for each dot
-    def __init__(self, kernel_size=5, downsample=1, softmax=False):
-        super(IndivBlur, self).__init__()
+    def __init__(self, kernel_size=64, downsample=1, softmax=False):
+        super(Refiner, self).__init__()
         self.kernel_size = kernel_size
         self.softmax = softmax
         self.downsample = downsample # Some models return a downsampled density-map
         
         self.adapt = nn.Sequential(
                                    nn.Conv2d(3, 32, 3, 1, 1),
-                                   nn.LeakyReLU(0.01),
+                                   nn.LeakyReLU(),
                                    nn.MaxPool2d(2), 
                                    nn.Conv2d(32, 64, 3, 1, 1),
-                                   nn.LeakyReLU(0.01),
+                                   nn.LeakyReLU(),
                                    nn.MaxPool2d(2),
                                    nn.Conv2d(64, 128, 3, 1, 1),
-                                   nn.LeakyReLU(0.01),
+                                   nn.LeakyReLU(),
                                    nn.MaxPool2d(2),
                                    nn.Conv2d(128, 128, 3, 1, 1),
-                                   nn.LeakyReLU(0.01),
+                                   nn.LeakyReLU(),
                                    nn.MaxPool2d(2),
                                    nn.Conv2d(128, self.kernel_size**2, 3, 1, 1))
-        self._initialize_weights()
 
     def forward(self, batch_points, batch_img, shape):
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -68,13 +67,3 @@ class IndivBlur(nn.Module):
         density = density[:, :, self.kernel_size:-self.kernel_size, self.kernel_size:-self.kernel_size]
         return density
 
-
-    def _initialize_weights(self):
-        for m in self.modules():
-            if isinstance(m, nn.Conv2d):
-                nn.init.normal_(m.weight, std=0.01)
-                if m.bias is not None:
-                    nn.init.constant_(m.bias, 0)
-            elif isinstance(m, nn.BatchNorm2d):
-                nn.init.constant_(m.weight, 1)
-                nn.init.constant_(m.bias, 0)

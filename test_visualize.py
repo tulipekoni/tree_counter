@@ -5,7 +5,7 @@ import random
 from datasets.tree_counting_dataset import TreeCountingDataset  
 from models.unet import Unet
 import argparse
-from models.IndivBlur import IndivBlur
+from models.Refiner import Refiner
 from utils.helper import GaussianKernel
 import json
 
@@ -39,7 +39,7 @@ def load_model_and_refiner(config, checkpoint_path, device):
 
     # Check if 'refiner_state_dict' is in the checkpoint
     if 'refiner_state_dict' in checkpoint:
-        refiner = IndivBlur(kernel_size=kernel_size, softmax=config['softmax'], downsample=config['downsample'])
+        refiner = Refiner(kernel_size=kernel_size, softmax=config['softmax'], downsample=config['downsample'])
         refiner.load_state_dict(checkpoint['refiner_state_dict'])
         refiner.to(device)
         refiner.eval()

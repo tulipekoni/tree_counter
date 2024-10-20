@@ -5,7 +5,7 @@ from datasets.tree_counting_dataset import TreeCountingDataset
 from torch.utils.data import DataLoader
 import numpy as np
 from utils.helper import GaussianKernel
-from models.IndivBlur import IndivBlur
+from models.Refiner import Refiner
 from utils.config_loader import load_config
 from utils.checkpoint_utils import find_checkpoint_file, load_checkpoint
 from utils.arg_parser import parse_test_args
@@ -31,8 +31,8 @@ if __name__ == '__main__':
     model.eval()
 
     # Initialize refiner or kernel generator
-    if config['use_indivblur']:
-        refiner = IndivBlur(kernel_size=kernel_size, softmax=config['softmax'], downsample=config['downsample'])
+    if config['use_refiner']:
+        refiner = Refiner(kernel_size=kernel_size, softmax=config['softmax'], downsample=config['downsample'])
         refiner.load_state_dict(refiner_state_dict)
         refiner.to(device)
         refiner.eval()
@@ -60,7 +60,7 @@ if __name__ == '__main__':
                 outputs = model(x)
 
                 # Generate ground truth density maps
-                if config['use_indivblur']:
+                if config['use_refiner']:
                     pred = refiner(y, x, outputs.shape)
                 else:
                     pred = kernel_generator.generate_density_map(y, outputs.shape)

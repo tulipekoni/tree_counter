@@ -5,7 +5,7 @@ This project implements a kernel-based density map generation method for dense o
 ## Features
 
 - Utilizes a U-Net architecture for density map prediction
-- Implements both Gaussian kernel and IndivBlur methods for ground truth generation
+- Implements both Gaussian kernel and Refiner methods for ground truth generation
 - Supports training, validation, and testing phases
 - Includes visualization tools for density maps
 
@@ -76,7 +76,7 @@ The `config.json` file contains all the hyperparameters and settings for the mod
 
 ## Project Structure
 
-- `models/`: Contains the U-Net and IndivBlur model implementations
+- `models/`: Contains the U-Net and Refiner model implementations
 - `datasets/`: Includes the TreeCountingDataset class
 - `utils/`: Helper functions and classes for training and evaluation
 - `train.py`: Main script for training the model

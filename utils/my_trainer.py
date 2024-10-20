@@ -12,7 +12,7 @@ import numpy as np
 from typing import Tuple
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 from models.unet import Unet
-from models.IndivBlur import IndivBlur
+from models.Refiner import Refiner
 from datasets.tree_counting_dataset import TreeCountingDataset
 from torch.utils.data import DataLoader
 from torch.utils.data.dataloader import default_collate
@@ -133,9 +133,9 @@ class MyTrainer(Trainer):
         # Model setup
         self.model = Unet()
 
-        # Check if IndivBlur is used
-        if config['use_indivblur']:
-            self.refiner = IndivBlur(kernel_size=self.kernel_size, softmax=config['softmax'], downsample=config['downsample'])
+        # Check if Refiner is used
+        if config['use_refiner']:
+            self.refiner = Refiner(kernel_size=self.kernel_size, softmax=config['softmax'], downsample=config['downsample'])
             self.refiner.to(self.device)
             refiner_params = list(self.refiner.parameters())
             self.refiner_optimizer = optim.Adam(refiner_params, lr=config['lr'], weight_decay=config['weight_decay'])
@@ -162,7 +162,7 @@ class MyTrainer(Trainer):
                 step_size=self.config['lr_decay_epoch'], 
                 gamma=self.config['lr_decay']
             )
-            if self.config['use_indivblur']:
+            if self.config['use_refiner']:
                 self.refiner_lr_scheduler = torch.optim.lr_scheduler.StepLR(
                     self.refiner_optimizer, 
                     step_size=self.config['lr_decay_epoch'], 
@@ -176,7 +176,7 @@ class MyTrainer(Trainer):
             self.optimizer.load_state_dict(optimizer_state_dict)
             if self.lr_scheduler and lr_scheduler_state_dict:
                 self.lr_scheduler.load_state_dict(lr_scheduler_state_dict)
-            if config['use_indivblur'] and refiner_state_dict is not None:
+            if config['use_refiner'] and refiner_state_dict is not None:
                 self.refiner.load_state_dict(refiner_state_dict)
                 self.refiner_optimizer.load_state_dict(refiner_optimizer_state_dict)
                 if self.refiner_lr_scheduler and refiner_lr_scheduler_state_dict:
@@ -226,7 +226,7 @@ class MyTrainer(Trainer):
 
             if self.config['use_lr_decay']:
                 self.lr_scheduler.step()
-                if self.config['use_indivblur']:
+                if self.config['use_refiner']:
                     self.refiner_lr_scheduler.step()
             
                 current_lr = self.lr_scheduler.get_last_lr()[0]
@@ -238,7 +238,7 @@ class MyTrainer(Trainer):
         epoch_rmse = AverageMeter()  # To track RMSE
         epoch_start = time.time()
         self.model.train() 
-        if self.config['use_indivblur']:
+        if self.config['use_refiner']:
             self.refiner.train()    
 
         # Iterate over data
@@ -249,14 +249,14 @@ class MyTrainer(Trainer):
 
             with torch.set_grad_enabled(True):
                 self.optimizer.zero_grad()
-                if self.config['use_indivblur']:
+                if self.config['use_refiner']:
                     self.refiner_optimizer.zero_grad()
 
                 # Forward pass through model
                 outputs = self.model(x)  # Predict
 
                 # Generate ground truth density maps
-                if self.config['use_indivblur']:
+                if self.config['use_refiner']:
                     pred = self.refiner(y, x, outputs.shape)  # Refine
                 else:
                     pred = self.kernel_generator.generate_density_map(y, outputs.shape)
@@ -268,7 +268,7 @@ class MyTrainer(Trainer):
 
                 # Update optimizers
                 self.optimizer.step()
-                if self.config['use_indivblur']:
+                if self.config['use_refiner']:
                     self.refiner_optimizer.step()
 
                 # Calculate predicted count (sum over spatial dimensions) and difference from ground truth
@@ -296,7 +296,7 @@ class MyTrainer(Trainer):
                 'optimizer_state_dict': self.optimizer.state_dict(),
                 'lr_scheduler_state_dict': self.lr_scheduler.state_dict() if self.lr_scheduler else None,
             }
-            if self.config['use_indivblur']:
+            if self.config['use_refiner']:
                 save_dict['refiner_state_dict'] = self.refiner.state_dict()
                 save_dict['refiner_optimizer_state_dict'] = self.refiner_optimizer.state_dict()
                 save_dict['refiner_lr_scheduler_state_dict'] = self.refiner_lr_scheduler.state_dict() if self.refiner_lr_scheduler else None
@@ -307,7 +307,7 @@ class MyTrainer(Trainer):
     def val_epoch(self):
         epoch_start = time.time()
         self.model.eval()
-        if self.config['use_indivblur']:
+        if self.config['use_refiner']:
             self.refiner.eval()
         epoch_res = []
         epoch_loss = 0
@@ -322,7 +322,7 @@ class MyTrainer(Trainer):
                 outputs = self.model(inputs)
                 
                 # Generate ground truth density maps
-                if self.config['use_indivblur']:
+                if self.config['use_refiner']:
                     pred = self.refiner(points, inputs, outputs.shape)
                 else:
                     pred = self.kernel_generator.generate_density_map(points, outputs.shape)
@@ -366,7 +366,7 @@ class MyTrainer(Trainer):
                 'optimizer_state_dict': self.optimizer.state_dict(),
                 'lr_scheduler_state_dict': self.lr_scheduler.state_dict() if self.lr_scheduler else None,
             }
-            if self.config['use_indivblur']:
+            if self.config['use_refiner']:
                 save_dict['refiner_state_dict'] = self.refiner.state_dict()
                 save_dict['refiner_optimizer_state_dict'] = self.refiner_optimizer.state_dict()
                 save_dict['refiner_lr_scheduler_state_dict'] = self.refiner_lr_scheduler.state_dict() if self.refiner_lr_scheduler else None
