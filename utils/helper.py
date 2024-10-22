@@ -1,14 +1,13 @@
 import os
-import torch
-
-class Save_Handle(object):
-    """handle the number of """
-    def __init__(self, max_num):
+import logging
+class ModelSaver(object):
+    """handle the number of saved models"""
+    def __init__(self, max_count):
         self.save_list = []
-        self.max_num = max_num
+        self.max_count = max_count
 
     def append(self, save_path):
-        if len(self.save_list) < self.max_num:
+        if len(self.save_list) < self.max_count:
             self.save_list.append(save_path)
         else:
             remove_path = self.save_list[0]
@@ -17,58 +16,38 @@ class Save_Handle(object):
             if os.path.exists(remove_path):
                 os.remove(remove_path)
 
-class AverageMeter(object):
-    """Computes and stores the average and current value"""
+class RunningAverageTracker(object):
     def __init__(self):
         self.reset()
 
     def reset(self):
-        self.val = 0
-        self.avg = 0
+        self.value = 0
+        self.average = 0
         self.sum = 0
         self.count = 0
 
-    def update(self, val, n=1):
-        self.val = val
-        self.sum += val * n
+    def update(self, value, n=1):
+        self.value = value
+        self.sum += value * n
         self.count += n
-        self.avg = 1.0 * self.sum / self.count
+        self.average = 1.0 * self.sum / self.count
 
-    def get_avg(self):
-        return self.avg
+    def get_average(self):
+        return self.average
 
     def get_count(self):
         return self.count
+    
+def setlogger(path):
+    logger = logging.getLogger()
+    logger.setLevel(logging.INFO)
+    logFormatter = logging.Formatter("%(asctime)s %(message)s",
+                                     "%m-%d %H:%M:%S")
 
-class GaussianKernel(object):
-    def __init__(self, kernel_size, downsample, device, sigma):
-        self.kernel_size = kernel_size
-        self.sigma = sigma  # Use the sigma from config
-        self.downsample = downsample
-        self.device = device
-        
-        ax = torch.arange(-self.kernel_size // 2 + 1., self.kernel_size // 2 + 1., device=self.device)
-        xx, yy = torch.meshgrid(ax, ax, indexing='ij')
-        kernel = torch.exp(-(xx**2 + yy**2) / (2. * self.sigma**2))
-        self.gaussian_kernel = kernel / torch.sum(kernel)
-     
-    def generate_density_map(self, batch_points, shape):
-        # Create an empty density map for this image
-        padded_shape = (shape[0], shape[1], shape[2] + 2 * self.kernel_size, shape[3] + 2 * self.kernel_size)
-        density = torch.zeros(padded_shape, device=self.device)            # For each point, place a Gaussian kernel
-          
-        for j, points in enumerate(batch_points):
-            num_points = len(points)
-            if num_points == 0:
-                continue
-                
-            for point in points:
-                x = int(point[0] / self.downsample - self.kernel_size/2) + self.kernel_size
-                y = int(point[1] / self.downsample - self.kernel_size/2) + self.kernel_size
-                xmax = x + self.kernel_size
-                ymax = y + self.kernel_size
+    fileHandler = logging.FileHandler(path)
+    fileHandler.setFormatter(logFormatter)
+    logger.addHandler(fileHandler)
 
-                density[j, :, x:xmax, y:ymax] += self.gaussian_kernel
-                
-        density = density[:, :, self.kernel_size:-self.kernel_size, self.kernel_size:-self.kernel_size]
-        return density
+    consoleHandler = logging.StreamHandler()
+    consoleHandler.setFormatter(logFormatter)
+    logger.addHandler(consoleHandler)

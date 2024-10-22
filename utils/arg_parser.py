@@ -37,7 +37,7 @@ def parse_preprocess_args() -> argparse.Namespace:
     parser.add_argument('--save_dir', type=str, default='./processed_data', required=False, help='Directory to save processed data.')
     parser.add_argument('--block_size', type=int, default=320, help='Size of image patches.')
     parser.add_argument('--max_images', type=int, default=None, help='Maximum number of images to process (for debugging).')
-    parser.add_argument('--val-split', type=float, default=0.2, help='Percentage of the training data to use for validation.')
+    parser.add_argument('--val_split', type=float, default=0.2, help='Percentage of the training data to use for validation.')
     return parser.parse_args()
 
 def parse_args_to_config(args: argparse.Namespace) -> Dict[str, Any]:

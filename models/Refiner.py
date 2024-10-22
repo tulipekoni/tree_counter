@@ -4,27 +4,34 @@ import torch.nn.functional as F
 
 
 class Refiner(nn.Module):
-    ## learn a kernel for each dot
-    def __init__(self, kernel_size=64, downsample=1, softmax=False):
+    def __init__(self, downsample=1, softmax=False, sigma=15):
         super(Refiner, self).__init__()
-        self.kernel_size = kernel_size
         self.softmax = softmax
-        self.downsample = downsample # Some models return a downsampled density-map
+        self.downsample = downsample
+        self.sigma = sigma
+        self.kernel_size = self.calculate_kernel_size(sigma)
         
         self.adapt = nn.Sequential(
-                                   nn.Conv2d(3, 32, 3, 1, 1),
-                                   nn.LeakyReLU(),
-                                   nn.MaxPool2d(2), 
-                                   nn.Conv2d(32, 64, 3, 1, 1),
-                                   nn.LeakyReLU(),
-                                   nn.MaxPool2d(2),
-                                   nn.Conv2d(64, 128, 3, 1, 1),
-                                   nn.LeakyReLU(),
-                                   nn.MaxPool2d(2),
-                                   nn.Conv2d(128, 128, 3, 1, 1),
-                                   nn.LeakyReLU(),
-                                   nn.MaxPool2d(2),
-                                   nn.Conv2d(128, self.kernel_size**2, 3, 1, 1))
+            nn.Conv2d(3, 32, 3, 1, 1),
+            nn.LeakyReLU(),
+            nn.MaxPool2d(2), 
+            nn.Conv2d(32, 64, 3, 1, 1),
+            nn.LeakyReLU(),
+            nn.MaxPool2d(2),
+            nn.Conv2d(64, 128, 3, 1, 1),
+            nn.LeakyReLU(),
+            nn.MaxPool2d(2),
+            nn.Conv2d(128, 128, 3, 1, 1),
+            nn.LeakyReLU(),
+            nn.MaxPool2d(2),
+            nn.Conv2d(128, self.kernel_size**2, 3, 1, 1)
+        )
+
+    def calculate_kernel_size(self, sigma):
+        kernel_size = int(6 * sigma) + 3
+        if kernel_size % 2 == 0:
+            kernel_size += 1
+        return kernel_size
 
     def forward(self, batch_points, batch_img, shape):
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -66,4 +73,3 @@ class Refiner(nn.Module):
         # Remove the padding and return the density map with the original shape
         density = density[:, :, self.kernel_size:-self.kernel_size, self.kernel_size:-self.kernel_size]
         return density
-

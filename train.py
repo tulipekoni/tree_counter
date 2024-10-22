@@ -1,15 +1,8 @@
-from utils.arg_parser import parse_train_args, parse_args_to_config
-from utils.config_loader import load_config, override_config
-from utils.my_trainer import MyTrainer
-import argparse
 import os
 import torch
-
-def parse_args():
-    parser = argparse.ArgumentParser(description='Train ')
-    parser.add_argument('--config', default='config.json', help='path to config file')
-    parser.add_argument('--override', nargs='*', help='override config parameters')
-    return parser.parse_args()
+from utils.static import Static
+from utils.arg_parser import parse_train_args, parse_args_to_config
+from utils.config_loader import load_config, override_config
 
 if __name__ == '__main__':
     args = parse_train_args()
@@ -22,6 +15,6 @@ if __name__ == '__main__':
 
     torch.backends.cudnn.benchmark = True
     os.environ['CUDA_VISIBLE_DEVICES'] = config['device'].strip()  # set vis gpu
-    trainer = MyTrainer(config)
+    trainer = Static(config)
     trainer.setup()
     trainer.train()

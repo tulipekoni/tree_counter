@@ -29,11 +29,12 @@ class TreeCountingDataset(data.Dataset):
         return len(self.list_of_images)
 
     def __getitem__(self, index):
-        img_path = os.path.join(self.root_path, self.list_of_images[index])
-        points_path = img_path.replace('.png', '.npy').replace('.jpg', '.npy')
+        image_path = os.path.join(self.root_path, self.list_of_images[index])
+        labels_path = image_path.replace('.png', '.npy').replace('.jpg', '.npy')
 
-        x = self.trans(Image.open(img_path).convert('RGB'))
-        y = np.load(points_path)
+        image = self.trans(Image.open(image_path).convert('RGB'))
+        labels = torch.from_numpy(np.load(labels_path)).float() 
+        name = self.list_of_images[index]
 
-        # Return image, keypoints (converted to torch Tensor), and filename
-        return x, torch.from_numpy(y).float(), self.list_of_images[index]
+  
+        return image, labels , name

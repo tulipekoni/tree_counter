@@ -7,7 +7,7 @@ import numpy as np
 from utils.helper import GaussianKernel
 from models.Refiner import Refiner
 from utils.config_loader import load_config
-from utils.checkpoint_utils import find_checkpoint_file, load_checkpoint
+from utils.checkpoints import find_checkpoint_file, load_checkpoint
 from utils.arg_parser import parse_test_args
 
 if __name__ == '__main__':
@@ -19,7 +19,7 @@ if __name__ == '__main__':
 
     # Find and load checkpoint
     checkpoint_path = find_checkpoint_file(args.model_folder)
-    model_state_dict, refiner_state_dict, _, _, _, _, kernel_size, _ = load_checkpoint(checkpoint_path)
+    model_state_dict, refiner_state_dict, _, _, _, _, _ = load_checkpoint(checkpoint_path)
 
     # Setup device
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -89,4 +89,5 @@ if __name__ == '__main__':
     combined_rmse = np.sqrt(np.mean(np.array(rmse_A + rmse_C)))
 
     print(f"Combined Test Results: MAE = {combined_mae:.2f}, RMSE = {combined_rmse:.2f}")
+
 

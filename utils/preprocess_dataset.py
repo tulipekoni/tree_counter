@@ -1,10 +1,10 @@
-import PIL
-from PIL import Image
-import numpy as np
 import os
-from utils.arg_parser import parse_preprocess_args
-PIL.Image.MAX_IMAGE_PIXELS = 1262080000
 import random
+import numpy as np
+from PIL import Image
+from arg_parser import parse_preprocess_args
+
+Image.MAX_IMAGE_PIXELS = 1262080000
 
 def split_image(image_array, padding, cols=4):
     """
@@ -36,11 +36,9 @@ def process_and_save(image_column, label_column, region_name, save_dir, patch_si
             label_patch = label_column[y:y+patch_size, x:x+patch_size]
             patches.append((data_patch, label_patch))
 
-    # Limit the number of patches if max_images is specified
     if max_images is not None:
         patches = patches[:max_images]
 
-    # Shuffle the patches
     random.shuffle(patches)
 
     # If validation split is needed
@@ -49,18 +47,13 @@ def process_and_save(image_column, label_column, region_name, save_dir, patch_si
         train_patches = patches[:split_index]
         val_patches = patches[split_index:]
 
-        # Save training patches
         save_patches(train_patches, region_name, save_dir, is_val=False)
-
-        # Save validation patches
         save_patches(val_patches, region_name, save_dir.replace('train', 'val'), is_val=True)
     else:
-        # Save all patches (for test regions or regions without validation)
         save_patches(patches, region_name, save_dir, is_val=False)
 
 
 def save_patches(patches, region_name, save_dir, is_val=False):
-    """Helper function to save patches."""
     patch_count = 0
 
     if not os.path.exists(save_dir):
@@ -89,31 +82,26 @@ def save_patches(patches, region_name, save_dir, is_val=False):
 if __name__ == '__main__':
     args = parse_preprocess_args()
 
-    # Load the large images
     data_path = args.data_path
     
     data_image = Image.open(data_path + '/z20_data.png')
     label_image = Image.open(data_path + '/z20_label.png')
 
-    # Convert to numpy arrays
     data_array = np.array(data_image)
     label_array = np.array(label_image)
 
-    # Define padding size
     padding = 4000
     
     # Split the images into regions (A, B, C, D)
     data_columns = split_image(data_array, padding)
     label_columns = split_image(label_array, padding)
     
-    # Define regions and their use for training, testing, and validation
     regions = {'A': 'test', 'B': 'train', 'C': 'test', 'D': 'train'}
     
-    # Ensure save directory exists
     if not os.path.exists(args.save_dir):
         os.makedirs(args.save_dir)
         
-    # Process each region and save patches and .mat files
+    # Process each region and 
     for i, region_name in enumerate(['A', 'B', 'C', 'D']):
         save_dir = os.path.join(args.save_dir, regions[region_name])
 
