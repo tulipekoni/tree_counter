@@ -3,16 +3,16 @@ import json
 import torch
 import logging
 import numpy as np
-from datetime import datetime
-from utils.helper import ModelSaver, setlogger
-from torch.optim import lr_scheduler, Adam
-from abc import ABC, abstractmethod
-import torch.utils.data.dataloader
 from models.UNet import UNet
-from datasets.tree_counting_dataset import TreeCountingDataset
-from torch.utils.data import DataLoader
-from torch.utils.data.dataloader import default_collate
+from datetime import datetime
 import matplotlib.pyplot as plt
+import torch.utils.data.dataloader
+from abc import ABC, abstractmethod
+from torch.utils.data import DataLoader
+from torch.optim import lr_scheduler, Adam
+from utils.helper import ModelSaver, setlogger
+from torch.utils.data.dataloader import default_collate
+from datasets.tree_counting_dataset import TreeCountingDataset
 
 
 class Trainer(ABC):

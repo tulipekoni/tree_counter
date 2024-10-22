@@ -5,8 +5,6 @@ from collections import OrderedDict
 
 import torch
 import torch.nn as nn
-from torchsummary import summary
-
 
 class UNet(nn.Module):
 
@@ -112,7 +110,3 @@ class UNet(nn.Module):
             elif isinstance(m, nn.BatchNorm2d):
                 nn.init.constant_(m.weight, 1)
                 nn.init.constant_(m.bias, 0)
-
-if __name__ == "__main__":
-    model = UNet(in_channels=3, out_channels=1, init_features=32)
-    summary(model, input_size=(3, 320, 320), device="cpu")
