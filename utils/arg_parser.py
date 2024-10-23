@@ -21,7 +21,7 @@ def parse_test_args() -> argparse.Namespace:
         argparse.Namespace: Parsed arguments
     """
     parser = argparse.ArgumentParser(description='Test the tree counting model')
-    parser.add_argument('--data_dir', type=str, default='./processed_data', required=True, help='Path to the data directory')
+    parser.add_argument('--data_dir', type=str, default='./processed_data', help='Path to the data directory')
     parser.add_argument('--model_dir', type=str, required=True, help='Path to the model folder containing .tar file')
     parser.add_argument('--num_workers', type=int, default=8, help='Number of workers for data loading')
     return parser.parse_args()
