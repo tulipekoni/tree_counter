@@ -17,9 +17,31 @@ class TreeCountingDataset(data.Dataset):
         - filter_func (callable, optional): Function for filtering the dataset. If None, all images are included.
         """
 
-        self.root_path = os.path.join(root_path, 'test')
+        self.root_path = root_path
 
-        all_images = [f for f in os.listdir(self.root_path) if f.endswith('.png') or f.endswith('.jpg')]
+        all_images = [f for f in os.listdir(root_path) if f.endswith('.png') or f.endswith('.jpg')]
+        
+        if filter_func:
+            self.list_of_images = sorted([f for f in all_images if filter_func(f)])
+        else:
+            self.list_of_images = sorted(all_images)
+
+        self.trans = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])  # For RGB images
+        ])
+
+    def __init__(self, root_path, filter_func=None):
+        """
+        Dataset class for tree counting images and corresponding keypoints.
+
+        Args:
+        - root_path (str): Path to the directory containing the images and keypoints.
+        - filter_func (callable, optional): Function for filtering the dataset. If None, all images are included.
+        """
+
+
+        all_images = [f for f in os.listdir(root_path) if f.endswith('.png') or f.endswith('.jpg')]
         
         if filter_func:
             self.list_of_images = sorted([f for f in all_images if filter_func(f)])
