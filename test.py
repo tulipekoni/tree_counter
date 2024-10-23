@@ -72,19 +72,16 @@ def main():
 
     # Test on region A
     mae_A, rmse_A = test_model(model, loader_A, device)
+    print(f"Region A - MAE: {mae_A:.2f}, RMSE: {rmse_A:.2f}")
 
     # Test on region C
     mae_C, rmse_C = test_model(model, loader_C, device)
+    print(f"Region C - MAE: {mae_C:.2f}, RMSE: {rmse_C:.2f}")
 
     # Calculate combined metrics
     total_count = len(dataset_A) + len(dataset_C)
     mae_combined = (mae_A * len(dataset_A) + mae_C * len(dataset_C)) / total_count
     rmse_combined = np.sqrt((rmse_A**2 * len(dataset_A) + rmse_C**2 * len(dataset_C)) / total_count)
-
-
-    # Print results
-    print(f"Region A - MAE: {mae_A:.2f}, RMSE: {rmse_A:.2f}")
-    print(f"Region C - MAE: {mae_C:.2f}, RMSE: {rmse_C:.2f}")
     print(f"All - MAE: {mae_combined:.2f}, RMSE: {rmse_combined:.2f}")
 
 if __name__ == "__main__":
