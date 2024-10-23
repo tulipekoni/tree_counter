@@ -31,7 +31,7 @@ def test_model(model, dataloader, device):
     epoch_rmse = RunningAverageTracker()
 
     with torch.no_grad():
-        for batch_images, batch_labels, batch_names in enumerate(dataloader):
+        for step, (batch_images, batch_labels, batch_names) in enumerate(dataloader):
             batch_gt_count = torch.tensor([len(p) for p in batch_labels], dtype=torch.float32, device=device)
             batch_images = batch_images.to(device)
             batch_pred_density_maps = model(batch_images)
@@ -60,12 +60,12 @@ def main():
     def filter_A(filename):
         return filename.startswith("A_")
     
-    def filter_B(filename):
-        return filename.startswith("B")  
+    def filter_C(filename):
+        return filename.startswith("C_")  
 
     # Prepare datasets and dataloaders
     dataset_A = TreeCountingDataset(root_path=os.path.join(args.data_dir, 'test'), filter_func=filter_A)
-    dataset_C = TreeCountingDataset(root_path=os.path.join(args.data_dir, 'test'), filter_func=filter_B)
+    dataset_C = TreeCountingDataset(root_path=os.path.join(args.data_dir, 'test'), filter_func=filter_C)
 
     loader_A = DataLoader(dataset_A, batch_size=1, shuffle=False, num_workers=args.num_workers)
     loader_C = DataLoader(dataset_C, batch_size=1, shuffle=False, num_workers=args.num_workers)
