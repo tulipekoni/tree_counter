@@ -27,8 +27,8 @@ def load_model(checkpoint_path, device):
     return model
 
 def test_model(model, dataloader, device):
-    epoch_mae = RunningAverageTracker()
-    epoch_rmse = RunningAverageTracker()
+    test_mae = RunningAverageTracker()
+    test_rmse = RunningAverageTracker()
 
     with torch.no_grad():
         for step, (batch_images, batch_labels, batch_names) in enumerate(dataloader):
@@ -40,13 +40,13 @@ def test_model(model, dataloader, device):
             batch_pred_counts = batch_pred_density_maps.sum(dim=(1, 2, 3)).detach()
             batch_differences = batch_pred_counts - batch_gt_count
 
-            # Update loss, MAE, and RMSE metrics
+            # Update MAE and RMSE metrics
             batch_size = batch_pred_counts.shape[0]
-            epoch_mae.update(torch.mean(torch.abs(batch_differences)).item(), batch_size)
-            epoch_rmse.update(torch.sqrt(torch.mean(batch_differences ** 2)).item(), batch_size)
+            test_mae.update(torch.abs(batch_differences).sum().item(), n=batch_size)
+            test_rmse.update(torch.sum(batch_differences ** 2).item(), n=batch_size)
 
-    average_rmse = epoch_rmse.get_average()
-    average_mae = epoch_mae.get_average()
+    average_mae = test_mae.get_average()
+    average_rmse = torch.sqrt(torch.tensor(test_rmse.get_average())).item()
        
     return average_mae, average_rmse
 
@@ -85,8 +85,7 @@ def main():
     # Print results
     print(f"Region A - MAE: {mae_A:.2f}, RMSE: {rmse_A:.2f}")
     print(f"Region C - MAE: {mae_C:.2f}, RMSE: {rmse_C:.2f}")
-    print(f"Combined - MAE: {mae_combined:.2f}, RMSE: {rmse_combined:.2f}")
-    print(f"Combined MAE + RMSE: {mae_combined + rmse_combined:.2f}")
+    print(f"All - MAE: {mae_combined:.2f}, RMSE: {rmse_combined:.2f}")
 
 if __name__ == "__main__":
     main()

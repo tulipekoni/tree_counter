@@ -48,12 +48,12 @@ class Static(Trainer):
                 # Update loss, MAE, and RMSE metrics
                 batch_size = batch_pred_counts.shape[0]
                 epoch_loss.update(loss.item(), batch_size)
-                epoch_mae.update(torch.mean(torch.abs(batch_differences)).item(), batch_size) 
-                epoch_rmse.update(torch.sqrt(torch.mean(batch_differences ** 2)).item(), batch_size)  
+                epoch_mae.update(torch.abs(batch_differences).sum().item(), batch_size)
+                epoch_rmse.update(torch.sum(batch_differences ** 2).item(), batch_size)
 
         average_loss = epoch_loss.get_average()
-        average_rmse = epoch_rmse.get_average()
         average_mae = epoch_mae.get_average()
+        average_rmse = torch.sqrt(torch.tensor(epoch_rmse.get_average())).item()
         logging.info(f'Training: Loss: {average_loss:.2f}, RMSE: {average_rmse:.2f}, MAE: {average_mae:.2f}, Cost {time.time() - start_time:.1f} sec') 
 
         return average_loss, average_rmse, average_mae
@@ -84,12 +84,12 @@ class Static(Trainer):
                 # Update loss, MAE, and RMSE metrics
                 batch_size = batch_pred_counts.shape[0]
                 epoch_loss.update(loss.item(), batch_size)
-                epoch_mae.update(torch.mean(torch.abs(batch_differences)).item(), batch_size)
-                epoch_rmse.update(torch.sqrt(torch.mean(batch_differences ** 2)).item(), batch_size)
+                epoch_mae.update(torch.abs(batch_differences).sum().item(), batch_size)
+                epoch_rmse.update(torch.sum(batch_differences ** 2).item(), batch_size)
 
         average_loss = epoch_loss.get_average()
-        average_rmse = epoch_rmse.get_average()
         average_mae = epoch_mae.get_average()
+        average_rmse = torch.sqrt(torch.tensor(epoch_rmse.get_average())).item()
         logging.info(f'Validation: Loss: {average_loss:.2f}, RMSE: {average_rmse:.2f}, MAE: {average_mae:.2f}, Cost {time.time() - start_time:.1f} sec')
 
         return average_loss, average_rmse, average_mae
