@@ -1,93 +1,75 @@
 import os
 import torch
-from models.unet import Unet
-from datasets.tree_counting_dataset import TreeCountingDataset
-from torch.utils.data import DataLoader
 import numpy as np
-from utils.helper import GaussianKernel
-from models.Refiner import Refiner
-from utils.config_loader import load_config
-from utils.checkpoints import find_checkpoint_file, load_checkpoint
+from models.UNet import UNet
+from torch.utils.data import DataLoader
 from utils.arg_parser import parse_test_args
+from models.StaticRefiner import StaticRefiner
+from datasets.tree_counting_dataset import TreeCountingDataset
 
-if __name__ == '__main__':
-    args = parse_test_args()
 
-    # Load config
-    config_path = os.path.join(args.model_folder, 'config.json')
-    config = load_config(config_path)
-
-    # Find and load checkpoint
-    checkpoint_path = find_checkpoint_file(args.model_folder)
-    model_state_dict, refiner_state_dict, _, _, _, _, _ = load_checkpoint(checkpoint_path)
-
-    # Setup device
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
-    # Initialize model
-    model = Unet()
-    model.load_state_dict(model_state_dict)
+def load_model(checkpoint_path, device):
+    model = UNet()
+    checkpoint = torch.load(checkpoint_path, map_location=device)
+    model.load_state_dict(checkpoint['model_state_dict'])
     model.to(device)
     model.eval()
+    return model, checkpoint['sigma']
 
-    # Initialize refiner or kernel generator
-    if config['use_refiner']:
-        refiner = Refiner(kernel_size=kernel_size, softmax=config['softmax'], downsample=config['downsample'])
-        refiner.load_state_dict(refiner_state_dict)
-        refiner.to(device)
-        refiner.eval()
-    else:
-        kernel_generator = GaussianKernel(kernel_size=kernel_size, downsample=config['downsample'], device=device, sigma=config['gaussian_sigma'])
+def test_model(model, dataloader, refiner, device):
+    mae_sum = 0
+    rmse_sum = 0
+    count = 0
 
-    # Load test dataset
-    test_dataset = TreeCountingDataset(root_path=os.path.join(args.data_dir, 'test'))
-    test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False, num_workers=config['num_workers'])
+    with torch.no_grad():
+        for images, labels, _ in enumerate(dataloader, desc="Testing"):
+            images = images.to(device)
+            labels = [label.to(device) for label in labels]
+            gt_count = torch.tensor([len(p) for p in labels], dtype=torch.float32, device=device)
 
-    # Testing function
-    def test_region(loader, region_prefix):
-        mae_list = []
-        rmse_list = []
+            pred_density_maps = model(images)
+            pred_counts = pred_density_maps.sum(dim=(1, 2, 3))
 
-        with torch.no_grad():
-            for x, y, filename in loader:
-                if not filename[0].startswith(region_prefix):
-                    continue
+            differences = pred_counts - gt_count
+            mae_sum += torch.abs(differences).sum().item()
+            rmse_sum += torch.sum(differences ** 2).item()
+            count += len(gt_count)
 
-                x = x.to(device)
-                y = [p.to(device) for p in y]
+    mae = mae_sum / count
+    rmse = np.sqrt(rmse_sum / count)
+    return mae, rmse
 
-                # Forward pass
-                outputs = model(x)
+def main():
+    args = parse_test_args()
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-                # Generate ground truth density maps
-                if config['use_refiner']:
-                    pred = refiner(y, x, outputs.shape)
-                else:
-                    pred = kernel_generator.generate_density_map(y, outputs.shape)
+    # Load model
+    model, sigma = load_model(args.checkpoint, device)
+    refiner = StaticRefiner(device=device, sigma=sigma)
 
-                # Calculate metrics
-                gt_count = pred.sum().item()
-                pred_count = outputs.sum().item()
-                mae = abs(gt_count - pred_count)
-                rmse = (gt_count - pred_count) ** 2
+    # Prepare datasets and dataloaders
+    test_dataset_A = TreeCountingDataset(root_path=os.path.join(args.data_dir, 'test', 'A'))
+    test_dataset_C = TreeCountingDataset(root_path=os.path.join(args.data_dir, 'test', 'C'))
 
-                mae_list.append(mae)
-                rmse_list.append(rmse)
+    test_loader_A = DataLoader(test_dataset_A, batch_size=1, shuffle=False, num_workers=args.num_workers)
+    test_loader_C = DataLoader(test_dataset_C, batch_size=1, shuffle=False, num_workers=args.num_workers)
 
-        final_mae = np.mean(mae_list)
-        final_rmse = np.sqrt(np.mean(rmse_list))
+    # Test on region A
+    mae_A, rmse_A = test_model(model, test_loader_A, refiner, device)
 
-        print(f"Test Results for Region {region_prefix}: MAE = {final_mae:.2f}, RMSE = {final_rmse:.2f}")
-        return mae_list, rmse_list
+    # Test on region C
+    mae_C, rmse_C = test_model(model, test_loader_C, refiner, device)
 
-    # Test regions A and C separately
-    mae_A, rmse_A = test_region(test_loader, 'A')
-    mae_C, rmse_C = test_region(test_loader, 'C')
+    # Calculate combined metrics
+    total_count = len(test_dataset_A) + len(test_dataset_C)
+    mae_combined = (mae_A * len(test_dataset_A) + mae_C * len(test_dataset_C)) / total_count
+    rmse_combined = np.sqrt((rmse_A**2 * len(test_dataset_A) + rmse_C**2 * len(test_dataset_C)) / total_count)
 
-    # Calculate combined results
-    combined_mae = np.mean(mae_A + mae_C)
-    combined_rmse = np.sqrt(np.mean(np.array(rmse_A + rmse_C)))
+    # Print results
+    print(f"Region A - MAE: {mae_A:.2f}, RMSE: {rmse_A:.2f}")
+    print(f"Region C - MAE: {mae_C:.2f}, RMSE: {rmse_C:.2f}")
+    print(f"Combined - MAE: {mae_combined:.2f}, RMSE: {rmse_combined:.2f}")
+    print(f"Combined MAE + RMSE: {mae_combined + rmse_combined:.2f}")
 
-    print(f"Combined Test Results: MAE = {combined_mae:.2f}, RMSE = {combined_rmse:.2f}")
-
-
+if __name__ == "__main__":
+    main()
