@@ -58,9 +58,15 @@ def main():
     # Load model
     model, refiner = load_model(args.model_dir, device)
 
+    def filter_A(filename):
+        return filename.startswith("A_")
+    
+    def filter_B(filename):
+        return filename.startswith("B")  
+
     # Prepare datasets and dataloaders
-    dataset_A = TreeCountingDataset(root_path=os.path.join(args.data_dir, 'test', 'A'))
-    dataset_C = TreeCountingDataset(root_path=os.path.join(args.data_dir, 'test', 'C'))
+    dataset_A = TreeCountingDataset(root_path=os.path.join(args.data_dir, 'test', 'A'), filter_func=filter_A)
+    dataset_C = TreeCountingDataset(root_path=os.path.join(args.data_dir, 'test', 'C'), filter_func=filter_B)
 
     loader_A = DataLoader(dataset_A, batch_size=1, shuffle=False, num_workers=args.num_workers)
     loader_C = DataLoader(dataset_C, batch_size=1, shuffle=False, num_workers=args.num_workers)
@@ -75,6 +81,7 @@ def main():
     total_count = len(dataset_A) + len(dataset_C)
     mae_combined = (mae_A * len(dataset_A) + mae_C * len(dataset_C)) / total_count
     rmse_combined = np.sqrt((rmse_A**2 * len(dataset_A) + rmse_C**2 * len(dataset_C)) / total_count)
+
 
     # Print results
     print(f"Region A - MAE: {mae_A:.2f}, RMSE: {rmse_A:.2f}")

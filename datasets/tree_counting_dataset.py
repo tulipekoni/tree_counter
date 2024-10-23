@@ -8,17 +8,23 @@ from torchvision import transforms
 
 
 class TreeCountingDataset(data.Dataset):
-    def __init__(self, root_path):
+    def __init__(self, root_path, filter_func=None):
         """
         Dataset class for tree counting images and corresponding keypoints.
 
         Args:
         - root_path (str): Path to the directory containing the images and keypoints.
+        - filter_func (callable, optional): Function for filtering the dataset. If None, all images are included.
         """
 
-        self.root_path = root_path
+        self.root_path = os.path.join(root_path, 'test')
 
-        self.list_of_images = sorted([f for f in os.listdir(self.root_path) if f.endswith('.png') or f.endswith('.jpg')])
+        all_images = [f for f in os.listdir(self.root_path) if f.endswith('.png') or f.endswith('.jpg')]
+        
+        if filter_func:
+            self.list_of_images = sorted([f for f in all_images if filter_func(f)])
+        else:
+            self.list_of_images = sorted(all_images)
 
         self.trans = transforms.Compose([
             transforms.ToTensor(),
