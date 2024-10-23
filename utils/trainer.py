@@ -13,6 +13,8 @@ from torch.optim import lr_scheduler, Adam
 from utils.helper import ModelSaver, setlogger
 from torch.utils.data.dataloader import default_collate
 from datasets.tree_counting_dataset import TreeCountingDataset
+import torch.nn.functional as F
+from torch.nn import MSELoss
 
 
 class Trainer(ABC):
@@ -78,7 +80,10 @@ class Trainer(ABC):
         # Model setup
         self.model = UNet()
         self.model.to(self.device)
-        self.criterion = torch.nn.MSELoss(reduction='sum')
+        
+        # Update criterion to include both MSE and cosine loss
+        self.mse_criterion = MSELoss(reduction='sum')
+        self.criterion = self.combined_loss
         
         # Optimizer setup
         params = list(self.model.parameters())
@@ -101,6 +106,19 @@ class Trainer(ABC):
             self.load_checkpoint()
             self._update_graph(self.start_epoch-1)       
     
+    @staticmethod
+    def cos_loss(output, target):
+        B = output.shape[0]
+        output = output.reshape(B, -1)
+        target = target.reshape(B, -1)
+        loss = torch.mean(1 - F.cosine_similarity(output, target))
+        return loss
+
+    def combined_loss(self, output, target):
+        mse_loss = self.mse_criterion(output, target)
+        cos_loss = self.cos_loss(output, target)
+        return mse_loss + cos_loss * 10
+
     def train(self):
         config = self.config        
         
