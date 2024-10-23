@@ -10,11 +10,23 @@ from datasets.tree_counting_dataset import TreeCountingDataset
 
 def load_model(checkpoint_path, device):
     model = UNet()
-    checkpoint = torch.load(checkpoint_path, map_location=device)
+    
+    # Find the most recent .tar file in the resume folder
+    checkpoint_files = [f for f in os.listdir(checkpoint_path) if f.endswith('.tar')]
+    if not checkpoint_files:
+        raise FileNotFoundError(f"No .tar checkpoint files found in {checkpoint_path}")
+    
+    latest_checkpoint = max(checkpoint_files, key=lambda f: os.path.getmtime(os.path.join(checkpoint_path, f)))
+    checkpoint_path = os.path.join(checkpoint_path, latest_checkpoint)
+    checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)
+    
     model.load_state_dict(checkpoint['model_state_dict'])
+    refiner = StaticRefiner(device=device, sigma=checkpoint['sigma'])
     model.to(device)
+    refiner.to(device)
     model.eval()
-    return model, checkpoint['sigma']
+    refiner.eval()
+    return model, refiner
 
 def test_model(model, dataloader, refiner, device):
     mae_sum = 0
@@ -44,26 +56,25 @@ def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # Load model
-    model, sigma = load_model(args.checkpoint, device)
-    refiner = StaticRefiner(device=device, sigma=sigma)
+    model, refiner = load_model(args.model_dir, device)
 
     # Prepare datasets and dataloaders
-    test_dataset_A = TreeCountingDataset(root_path=os.path.join(args.data_dir, 'test', 'A'))
-    test_dataset_C = TreeCountingDataset(root_path=os.path.join(args.data_dir, 'test', 'C'))
+    dataset_A = TreeCountingDataset(root_path=os.path.join(args.data_dir, 'test', 'A'))
+    dataset_C = TreeCountingDataset(root_path=os.path.join(args.data_dir, 'test', 'C'))
 
-    test_loader_A = DataLoader(test_dataset_A, batch_size=1, shuffle=False, num_workers=args.num_workers)
-    test_loader_C = DataLoader(test_dataset_C, batch_size=1, shuffle=False, num_workers=args.num_workers)
+    loader_A = DataLoader(dataset_A, batch_size=1, shuffle=False, num_workers=args.num_workers)
+    loader_C = DataLoader(dataset_C, batch_size=1, shuffle=False, num_workers=args.num_workers)
 
     # Test on region A
-    mae_A, rmse_A = test_model(model, test_loader_A, refiner, device)
+    mae_A, rmse_A = test_model(model, loader_A, refiner, device)
 
     # Test on region C
-    mae_C, rmse_C = test_model(model, test_loader_C, refiner, device)
+    mae_C, rmse_C = test_model(model, loader_C, refiner, device)
 
     # Calculate combined metrics
-    total_count = len(test_dataset_A) + len(test_dataset_C)
-    mae_combined = (mae_A * len(test_dataset_A) + mae_C * len(test_dataset_C)) / total_count
-    rmse_combined = np.sqrt((rmse_A**2 * len(test_dataset_A) + rmse_C**2 * len(test_dataset_C)) / total_count)
+    total_count = len(dataset_A) + len(dataset_C)
+    mae_combined = (mae_A * len(dataset_A) + mae_C * len(dataset_C)) / total_count
+    rmse_combined = np.sqrt((rmse_A**2 * len(dataset_A) + rmse_C**2 * len(dataset_C)) / total_count)
 
     # Print results
     print(f"Region A - MAE: {mae_A:.2f}, RMSE: {rmse_A:.2f}")
