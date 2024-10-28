@@ -60,3 +60,25 @@ def parse_args_to_config(args: argparse.Namespace) -> Dict[str, Any]:
         config.update(overrides)
         del config['override']
     return config
+
+def parse_visualizer_args() -> argparse.Namespace:
+    """
+    Parse command-line arguments for the visualizer script.
+
+    Returns:
+        argparse.Namespace: Parsed arguments
+    """
+    parser = argparse.ArgumentParser(description='Visualize model predictions and ground truth')
+    parser.add_argument(
+        '--data_dir', type=str, default='./processed_data',
+        help='Path to the dataset directory'
+    )
+    parser.add_argument(
+        '--model_dir', type=str, required=True,
+        help='Path to the model folder containing .tar file'
+    )
+    parser.add_argument(
+        '--num_workers', type=int, default=2,
+        help='Number of workers for data loading'
+    )
+    return parser.parse_args()
