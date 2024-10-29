@@ -5,19 +5,21 @@ import numpy as np
 import torch
 import torchvision.transforms.functional as F
 from torchvision import transforms
+import random
 
 
 class TreeCountingDataset(data.Dataset):
-    def __init__(self, root_path, filter_func=None):
+    def __init__(self, root_path, filter_func=None, augment=True):
         """
         Dataset class for tree counting images and corresponding keypoints.
 
         Args:
         - root_path (str): Path to the directory containing the images and keypoints.
         - filter_func (callable, optional): Function for filtering the dataset. If None, all images are included.
+        - augment (bool): Whether to apply data augmentation. Default is True.
         """
-
         self.root_path = root_path
+        self.augment = augment
 
         all_images = [f for f in os.listdir(root_path) if f.endswith('.png') or f.endswith('.jpg')]
         
@@ -38,9 +40,21 @@ class TreeCountingDataset(data.Dataset):
         image_path = os.path.join(self.root_path, self.list_of_images[index])
         labels_path = image_path.replace('.png', '.npy').replace('.jpg', '.npy')
 
-        image = self.trans(Image.open(image_path).convert('RGB'))
-        labels = torch.from_numpy(np.load(labels_path)).float() 
+        image = Image.open(image_path).convert('RGB')
+        labels = np.load(labels_path)
+        labels = torch.from_numpy(labels).float()
+
+        # Apply random vertical flip augmentation during training
+        if self.augment and random.random() > 0.5:
+            image = F.vflip(image)
+            
+            # Flip label coordinates
+            if len(labels) > 0: 
+                height = image.height
+                labels[:, 1] = height - labels[:, 1]  # Flip y-coordinates
+
+        # Apply normalization after augmentation
+        image = self.trans(image)
         name = self.list_of_images[index]
 
-  
-        return image, labels , name
+        return image, labels, name

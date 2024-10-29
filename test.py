@@ -64,8 +64,8 @@ def main():
         return filename.startswith("C_")  
 
     # Prepare datasets and dataloaders
-    dataset_A = TreeCountingDataset(root_path=os.path.join(args.data_dir, 'test'), filter_func=filter_A)
-    dataset_C = TreeCountingDataset(root_path=os.path.join(args.data_dir, 'test'), filter_func=filter_C)
+    dataset_A = TreeCountingDataset(root_path=os.path.join(args.data_dir, 'test'), filter_func=filter_A, augment=False)
+    dataset_C = TreeCountingDataset(root_path=os.path.join(args.data_dir, 'test'), filter_func=filter_C, augment=False)
 
     loader_A = DataLoader(dataset_A, batch_size=1, shuffle=False, num_workers=args.num_workers)
     loader_C = DataLoader(dataset_C, batch_size=1, shuffle=False, num_workers=args.num_workers)

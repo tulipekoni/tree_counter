@@ -39,7 +39,7 @@ def main():
     model = load_model(args.model_dir, device)
 
     # Prepare dataset
-    dataset = TreeCountingDataset(root_path=os.path.join(args.data_dir, 'test'))
+    dataset = TreeCountingDataset(root_path=os.path.join(args.data_dir, 'test'), augment=False)
 
     # Create StaticRefiner instance
     refiner = StaticRefiner(device=device, sigma=15)
