@@ -44,14 +44,14 @@ class TreeCountingDataset(data.Dataset):
         labels = np.load(labels_path)
         labels = torch.from_numpy(labels).float()
 
-        # Apply random vertical flip augmentation during training
+        # Apply random horizontal flip augmentation during training
         if self.augment and random.random() > 0.5:
-            image = F.vflip(image)
+            image = F.hflip(image)
             
             # Flip label coordinates
             if len(labels) > 0: 
-                height = image.height
-                labels[:, 1] = height - labels[:, 1]  # Flip y-coordinates
+                width = image.width
+                labels[:, 0] = width - labels[:, 0]  # Flip x-coordinates
 
         # Apply normalization after augmentation
         image = self.trans(image)
