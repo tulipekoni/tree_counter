@@ -7,6 +7,8 @@ from models.UNet import UNet
 from models.StaticRefiner import StaticRefiner
 from datasets.tree_counting_dataset import TreeCountingDataset
 from utils.arg_parser import parse_visualizer_args
+from utils.trainer import Trainer
+from utils.losses import combined_loss
 
 def load_model(checkpoint_path, device):
     model = UNet()
@@ -91,7 +93,10 @@ def main():
         # Combine images side by side
         combined_image = np.hstack((image_np, gt_density_map_display, pred_density_map_display))
 
-        # Display images
+        # Calculate losses
+        loss = combined_loss(pred_density_map, gt_density_map)
+
+        # Display images and metrics
         cv2.imshow('Tree Counting Visualizer', combined_image)
         print(f'Image: {name}')
         print(f'Ground Truth Count: {gt_count:.2f}')

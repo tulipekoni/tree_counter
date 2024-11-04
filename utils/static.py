@@ -37,7 +37,7 @@ class Static(Trainer):
                 batch_gt_density_maps = self.refiner(batch_images, batch_labels)
 
                 # Loss for step
-                loss = self.combined_loss(batch_pred_density_maps, batch_gt_density_maps)
+                loss = self.loss_function(batch_pred_density_maps, batch_gt_density_maps)
                 loss.backward() 
                 self.optimizer.step()
 
@@ -75,7 +75,7 @@ class Static(Trainer):
                 batch_gt_density_maps = self.refiner(batch_images, batch_labels)
 
                 # Compute loss
-                loss = self.combined_loss(batch_pred_density_maps, batch_gt_density_maps)
+                loss = self.loss_function(batch_pred_density_maps, batch_gt_density_maps)
 
                 # The number of trees is total sum of all prediction pixels
                 batch_pred_counts = batch_pred_density_maps.sum(dim=(1, 2, 3)).detach()
