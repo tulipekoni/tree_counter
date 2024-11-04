@@ -80,11 +80,7 @@ class Trainer(ABC):
         # Model setup
         self.model = UNet()
         self.model.to(self.device)
-        
-        # Update criterion to include both MSE and cosine loss
-        self.mse_criterion = MSELoss(reduction='sum')
-        self.criterion = self.combined_loss
-        
+                
         # Optimizer setup
         params = list(self.model.parameters())
         self.optimizer = Adam(params, lr=config['lr'], weight_decay=config['weight_decay'])
@@ -115,9 +111,12 @@ class Trainer(ABC):
         return loss
 
     def combined_loss(self, output, target):
-        mse_loss = self.mse_criterion(output, target)
+        output_count = output.sum(dim=(1, 2, 3)).detach()
+        target_count = target.sum(dim=(1, 2, 3)).detach()
+        mae_loss = torch.mean(torch.abs(output_count - target_count))
         cos_loss = self.cos_loss(output, target)
-        return mse_loss + cos_loss * 10
+        total_loss = mae_loss + cos_loss * mae_loss
+        return total_loss
 
     def train(self):
         config = self.config        

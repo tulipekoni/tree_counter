@@ -81,7 +81,7 @@ The `config.json` file contains all the hyperparameters and settings for the mod
 - `utils/`: Helper functions and classes for training and evaluation
 - `train.py`: Main script for training the model
 - `test.py`: Script for evaluating the model on the test set
-- `test_visualize.py`: Script for visualizing density maps
+- `visualizer.py`: Script for visualizing density maps
 
 ## Citation
 
