@@ -7,7 +7,6 @@ from models.UNet import UNet
 from models.StaticRefiner import StaticRefiner
 from datasets.tree_counting_dataset import TreeCountingDataset
 from utils.arg_parser import parse_visualizer_args
-from utils.trainer import Trainer
 from utils.losses import combined_loss
 
 def load_model(checkpoint_path, device):
