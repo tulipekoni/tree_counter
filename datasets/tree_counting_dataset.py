@@ -53,12 +53,12 @@ class TreeCountingDataset(data.Dataset):
                     width = image.width
                     labels[:, 0] = width - labels[:, 0]  # Flip x-coordinates
             
-            # Vertical flip
-            if random.random() > 0.5:
-                image = F.vflip(image)
-                if len(labels) > 0:
-                    height = image.height
-                    labels[:, 1] = height - labels[:, 1]  # Flip y-coordinates
+            # # Vertical flip
+            # if random.random() > 0.5:
+            #     image = F.vflip(image)
+            #     if len(labels) > 0:
+            #         height = image.height
+            #         labels[:, 1] = height - labels[:, 1]  # Flip y-coordinates
 
         # Apply normalization after augmentation
         image = self.trans(image)
