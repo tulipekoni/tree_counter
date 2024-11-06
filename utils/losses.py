@@ -1,4 +1,5 @@
 import torch
+from torch.nn import MSELoss
 import torch.nn.functional as F
 
 def cos_loss(output, target):
@@ -31,10 +32,10 @@ def combined_loss(output, target):
     """
     output_count = output.sum(dim=(1, 2, 3))
     target_count = target.sum(dim=(1, 2, 3))
-    mae_loss = torch.mean(torch.abs(output_count - target_count))
 
+    mse_loss = F.mse_loss(output_count, target_count)
     cos_loss_val = cos_loss(output, target) 
     alpha = 10
-    total_loss = mae_loss + alpha * cos_loss_val
+    total_loss = mse_loss + alpha * cos_loss_val
 
     return total_loss
