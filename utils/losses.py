@@ -30,10 +30,10 @@ def combined_loss(output, target):
     Returns:
         torch.Tensor: Combined loss value
     """
-    output_count = output.sum(dim=(1, 2, 3))
-    target_count = target.sum(dim=(1, 2, 3))
+    #output_count = output.sum(dim=(1, 2, 3))
+    #target_count = target.sum(dim=(1, 2, 3))
 
-    mse_loss = F.mse_loss(output_count, target_count)
+    mse_loss = F.mse_loss(output, target)
     cos_loss_val = cos_loss(output, target) 
     alpha = 10
     total_loss = mse_loss + alpha * cos_loss_val
