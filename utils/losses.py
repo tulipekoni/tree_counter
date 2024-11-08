@@ -33,7 +33,8 @@ def combined_loss(output, target):
     #output_count = output.sum(dim=(1, 2, 3))
     #target_count = target.sum(dim=(1, 2, 3))
 
-    mse_loss = F.mse_loss(output, target)
+    mse_criterion = MSELoss(reduction='sum')
+    mse_loss = mse_criterion(output, target)
     cos_loss_val = cos_loss(output, target) 
     alpha = 10
     total_loss = mse_loss + alpha * cos_loss_val
