@@ -21,7 +21,7 @@ def cos_loss(output, target):
 
 def combined_loss(output, target):
     """
-    Calculate combined loss using MAE and cosine similarity.
+    Calculate combined loss using MSE and cosine similarity.
     
     Args:
         output (torch.Tensor): Model output tensor
@@ -30,13 +30,11 @@ def combined_loss(output, target):
     Returns:
         torch.Tensor: Combined loss value
     """
-    #output_count = output.sum(dim=(1, 2, 3))
-    #target_count = target.sum(dim=(1, 2, 3))
-
-    mse_criterion = MSELoss(reduction='sum')
+    mse_criterion = MSELoss(reduction='mean')
     mse_loss = mse_criterion(output, target)
-    cos_loss_val = cos_loss(output, target) 
-    alpha = 10
+    cos_loss_val = cos_loss(output, target)
+    
+    alpha = 1
+    
     total_loss = mse_loss + alpha * cos_loss_val
-
     return total_loss

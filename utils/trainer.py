@@ -74,8 +74,22 @@ class Trainer(ABC):
             'val': TreeCountingDataset(root_path=os.path.join(config['data_dir'], 'val')),
         }
         self.dataloaders = {
-            'train': DataLoader(self.datasets['train'], batch_size=config['batch_size'], shuffle=True, num_workers=config['num_workers'], pin_memory=True, collate_fn=self._batch_collate),
-            'val': DataLoader(self.datasets['val'], batch_size=1, shuffle=False, num_workers=config['num_workers'], collate_fn=default_collate),
+            'train': DataLoader(
+                self.datasets['train'], 
+                batch_size=config['batch_size'], 
+                shuffle=True, 
+                num_workers=config['num_workers'], 
+                pin_memory=True, 
+                collate_fn=self._batch_collate
+            ),
+            'val': DataLoader(
+                self.datasets['val'], 
+                batch_size=config['batch_size'], 
+                shuffle=False, 
+                num_workers=config['num_workers'], 
+                pin_memory=True,
+                collate_fn=self._batch_collate
+            ),
         }
         
         # Model setup
@@ -93,7 +107,6 @@ class Trainer(ABC):
 
         self.list_of_best_models = ModelSaver(max_count=config['max_saved_model_count'])
         
-        self.sigma = config['sigma']
         self.start_epoch = 0        
         self.best_val_mae = np.inf
         self.best_val_rmse = np.inf

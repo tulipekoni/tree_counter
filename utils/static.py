@@ -10,6 +10,7 @@ from models.StaticRefiner import StaticRefiner
 
 class Static(Trainer):
     def __init__(self, config):
+        self.sigma = 15
         super().__init__(config)
 
     def setup(self):
