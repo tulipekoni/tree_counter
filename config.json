@@ -8,12 +8,7 @@
     "max_epoch": 300,
     "weight_decay": 1e-4,
     "max_saved_model_count": 1,
-    "sigma": 15,
     
-    "use_refiner": false,
-    "cos_loss_weight": 10,
-    "softmax": false,
-
     "lr": 5e-3,
     "lr_gamma": 0.5,
     "lr_step_size": 50

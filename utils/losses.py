@@ -21,20 +21,23 @@ def cos_loss(output, target):
 
 def combined_loss(output, target):
     """
-    Calculate combined loss using MSE and cosine similarity.
-    
-    Args:
-        output (torch.Tensor): Model output tensor
-        target (torch.Tensor): Ground truth tensor
-        
-    Returns:
-        torch.Tensor: Combined loss value
+    Calculate loss for density maps where sum represents object count.
     """
-    mse_criterion = MSELoss(reduction='mean')
-    mse_loss = mse_criterion(output, target)
+    batch_size = output.shape[0]
+    
+    # MSE focused on non-zero regions
+    mse_criterion = MSELoss(reduction='sum')
+    pixel_loss = mse_criterion(output, target) / batch_size
+    
+    # Count prediction error
+    pred_counts = output.sum(dim=(1,2,3))  # Sum each density map
+    true_counts = target.sum(dim=(1,2,3))
+    count_loss = torch.abs(pred_counts - true_counts).mean()
+    
+    # Optional: keep cosine similarity for structural similarity
     cos_loss_val = cos_loss(output, target)
     
-    alpha = 1
+    # Combine with appropriate scaling
+    total_loss = pixel_loss + count_loss + 1 * cos_loss_val
     
-    total_loss = mse_loss + alpha * cos_loss_val
     return total_loss
