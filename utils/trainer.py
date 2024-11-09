@@ -46,6 +46,21 @@ class Trainer(ABC):
         with open(config_path, 'w') as f:
             json.dump(config, f, indent=4)
 
+        # Add moving average window size to config with default value
+        self.moving_avg_window = config.get('moving_avg_window', 5)
+        
+        # Initialize moving average queues
+        self.val_mae_queue = []
+        self.val_rmse_queue = []
+        
+        self.best_val_score = np.inf
+        self.best_val_mae = np.inf
+        self.best_val_rmse = np.inf
+        
+        # Add weights for the metrics
+        self.mae_weight = config.get('mae_weight', 0.5)
+        self.rmse_weight = config.get('rmse_weight', 0.5)
+
     def setup(self):
         """
         Initializes datasets, model, refiner, loss, and optimizer.      
@@ -118,6 +133,13 @@ class Trainer(ABC):
             self.load_checkpoint()
             self._update_graph(self.start_epoch-1)       
     
+    def _get_moving_average(self, queue, new_value):
+        """Calculate moving average with the new value"""
+        queue.append(new_value)
+        if len(queue) > self.moving_avg_window:
+            queue.pop(0)
+        return sum(queue) / len(queue)
+
     def train(self):
         config = self.config        
         
@@ -140,11 +162,21 @@ class Trainer(ABC):
             current_lr = self.lr_scheduler.get_last_lr()[0]
             logging.info(f'Current learning rate: {current_lr}')
             
-            # If this validation was the best one thus far -> save the model on disk
-            if(val_rmse + val_mae) < (self.best_val_rmse + self.best_val_mae):
-                self.best_val_rmse = val_rmse
-                self.best_val_mae = val_mae
-                self.save_checkpoint(epoch=epoch)
+            # Calculate moving averages
+            moving_avg_mae = self._get_moving_average(self.val_mae_queue, val_mae)
+            moving_avg_rmse = self._get_moving_average(self.val_rmse_queue, val_rmse)
+
+            # Calculate weighted score using moving averages
+            val_score = (self.mae_weight * moving_avg_mae + 
+                        self.rmse_weight * moving_avg_rmse)
+
+            # Only save if we have enough samples for a meaningful moving average
+            if len(self.val_mae_queue) >= self.moving_avg_window:
+                if val_score < self.best_val_score:
+                    logging.info(f'New best moving average score: {val_score:.4f} '
+                               f'(MAE: {moving_avg_mae:.4f}, RMSE: {moving_avg_rmse:.4f})')
+                    self.best_val_score = val_score
+                    self.save_checkpoint(epoch=epoch)
     
     def _update_graph(self, epoch):
         epochs = range(0, epoch + 1)

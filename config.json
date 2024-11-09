@@ -11,5 +11,9 @@
     
     "lr": 5e-3,
     "lr_gamma": 0.5,
-    "lr_step_size": 50
+    "lr_step_size": 50,
+
+    "mae_weight": 0.5,
+    "rmse_weight": 0.5,
+    "moving_avg_window": 5
 }
