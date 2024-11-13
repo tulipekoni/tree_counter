@@ -6,6 +6,7 @@ from torch.utils.data import DataLoader
 from utils.arg_parser import parse_test_args
 from utils.helper import RunningAverageTracker
 from datasets.tree_counting_dataset import TreeCountingDataset
+import gc
 
 
 def load_model(checkpoint_path, device):
@@ -25,42 +26,27 @@ def load_model(checkpoint_path, device):
     model.eval()
     return model
 
-def test_model(model, dataloader, device, chunk_size=2):
+def test_model(model, dataloader, device):
     test_mae = RunningAverageTracker()
     test_rmse = RunningAverageTracker()
 
     with torch.no_grad():
-        current_batch_images = []
-        current_batch_labels = []
-        
         for step, (batch_images, batch_labels, batch_names) in enumerate(dataloader):
-            current_batch_images.extend(batch_images)
-            current_batch_labels.extend(batch_labels)
-            
-            # Process when we have accumulated chunk_size images or at the end of the dataset
-            if len(current_batch_images) >= chunk_size or step == len(dataloader) - 1:
-                # Convert lists to tensors
-                chunk_images = torch.stack(current_batch_images).to(device)
-                chunk_gt_count = torch.tensor([len(p) for p in current_batch_labels], 
-                                           dtype=torch.float32, device=device)
-                
-                # Process chunk
-                chunk_pred_density_maps = model(chunk_images)
-                chunk_pred_counts = chunk_pred_density_maps.sum(dim=(1, 2, 3)).detach()
-                chunk_differences = chunk_pred_counts - chunk_gt_count
+            batch_gt_count = torch.tensor([len(p) for p in batch_labels], dtype=torch.float32, device=device)
+            batch_images = batch_images.to(device)
+            batch_pred_density_maps = model(batch_images)
 
-                # Update metrics
-                batch_size = chunk_pred_counts.shape[0]
-                test_mae.update(torch.abs(chunk_differences).sum().item(), n=batch_size)
-                test_rmse.update(torch.sum(chunk_differences ** 2).item(), n=batch_size)
+            batch_pred_counts = batch_pred_density_maps.sum(dim=(1, 2, 3)).cpu()
+            batch_gt_count = batch_gt_count.cpu()
+            batch_differences = batch_pred_counts - batch_gt_count
 
-                # Clear the current batches
-                current_batch_images = []
-                current_batch_labels = []
-                
-                # Free up CUDA memory
-                del chunk_images, chunk_pred_density_maps
-                torch.cuda.empty_cache()
+            del batch_pred_density_maps, batch_images
+            torch.cuda.empty_cache()
+            gc.collect()
+
+            batch_size = batch_pred_counts.shape[0]
+            test_mae.update(torch.abs(batch_differences).sum().item(), n=batch_size)
+            test_rmse.update(torch.sum(batch_differences ** 2).item(), n=batch_size)
 
     average_mae = test_mae.get_average()
     average_rmse = torch.sqrt(torch.tensor(test_rmse.get_average())).item()
@@ -87,14 +73,19 @@ def main():
     loader_A = DataLoader(dataset_A, batch_size=1, shuffle=False, num_workers=args.num_workers)
     loader_C = DataLoader(dataset_C, batch_size=1, shuffle=False, num_workers=args.num_workers)
 
+    # Clear GPU memory before starting tests
+    torch.cuda.empty_cache()
+    gc.collect()
+
     # Test on region A
     mae_A, rmse_A = test_model(model, loader_A, device)
-    print(f"Region A - MAE: {mae_A:.2f}, RMSE: {rmse_A:.2f}")
-
+    # Clear memory between tests
+    torch.cuda.empty_cache()
+    gc.collect()
+    
     # Test on region C
     mae_C, rmse_C = test_model(model, loader_C, device)
-    print(f"Region C - MAE: {mae_C:.2f}, RMSE: {rmse_C:.2f}")
-
+    
     # Calculate combined metrics
     total_count = len(dataset_A) + len(dataset_C)
     mae_combined = (mae_A * len(dataset_A) + mae_C * len(dataset_C)) / total_count
