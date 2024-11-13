@@ -4,7 +4,6 @@ import numpy as np
 from models.UNet import UNet
 from torch.utils.data import DataLoader
 from utils.arg_parser import parse_test_args
-from models.StaticRefiner import StaticRefiner
 from utils.helper import RunningAverageTracker
 from datasets.tree_counting_dataset import TreeCountingDataset
 
@@ -26,24 +25,42 @@ def load_model(checkpoint_path, device):
     model.eval()
     return model
 
-def test_model(model, dataloader, device):
+def test_model(model, dataloader, device, chunk_size=2):
     test_mae = RunningAverageTracker()
     test_rmse = RunningAverageTracker()
 
     with torch.no_grad():
+        current_batch_images = []
+        current_batch_labels = []
+        
         for step, (batch_images, batch_labels, batch_names) in enumerate(dataloader):
-            batch_gt_count = torch.tensor([len(p) for p in batch_labels], dtype=torch.float32, device=device)
-            batch_images = batch_images.to(device)
-            batch_pred_density_maps = model(batch_images)
+            current_batch_images.extend(batch_images)
+            current_batch_labels.extend(batch_labels)
+            
+            # Process when we have accumulated chunk_size images or at the end of the dataset
+            if len(current_batch_images) >= chunk_size or step == len(dataloader) - 1:
+                # Convert lists to tensors
+                chunk_images = torch.stack(current_batch_images).to(device)
+                chunk_gt_count = torch.tensor([len(p) for p in current_batch_labels], 
+                                           dtype=torch.float32, device=device)
+                
+                # Process chunk
+                chunk_pred_density_maps = model(chunk_images)
+                chunk_pred_counts = chunk_pred_density_maps.sum(dim=(1, 2, 3)).detach()
+                chunk_differences = chunk_pred_counts - chunk_gt_count
 
-            # The number of trees is total sum of all prediction pixels
-            batch_pred_counts = batch_pred_density_maps.sum(dim=(1, 2, 3)).detach()
-            batch_differences = batch_pred_counts - batch_gt_count
+                # Update metrics
+                batch_size = chunk_pred_counts.shape[0]
+                test_mae.update(torch.abs(chunk_differences).sum().item(), n=batch_size)
+                test_rmse.update(torch.sum(chunk_differences ** 2).item(), n=batch_size)
 
-            # Update MAE and RMSE metrics
-            batch_size = batch_pred_counts.shape[0]
-            test_mae.update(torch.abs(batch_differences).sum().item(), n=batch_size)
-            test_rmse.update(torch.sum(batch_differences ** 2).item(), n=batch_size)
+                # Clear the current batches
+                current_batch_images = []
+                current_batch_labels = []
+                
+                # Free up CUDA memory
+                del chunk_images, chunk_pred_density_maps
+                torch.cuda.empty_cache()
 
     average_mae = test_mae.get_average()
     average_rmse = torch.sqrt(torch.tensor(test_rmse.get_average())).item()
