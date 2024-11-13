@@ -1,4 +1,6 @@
 import os
+os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True'
+
 import torch
 import numpy as np
 from models.UNet import UNet
@@ -7,6 +9,7 @@ from utils.arg_parser import parse_test_args
 from utils.helper import RunningAverageTracker
 from datasets.tree_counting_dataset import TreeCountingDataset
 import gc
+import math
 
 
 def load_model(checkpoint_path, device):
@@ -29,29 +32,51 @@ def load_model(checkpoint_path, device):
 def test_model(model, dataloader, device):
     test_mae = RunningAverageTracker()
     test_rmse = RunningAverageTracker()
-
-    with torch.no_grad():
+    
+    # Move model to eval mode
+    model.eval()
+    
+    with torch.no_grad(), torch.cuda.amp.autocast():  # Enable automatic mixed precision
         for step, (batch_images, batch_labels, batch_names) in enumerate(dataloader):
-            batch_gt_count = torch.tensor([len(p) for p in batch_labels], dtype=torch.float32, device=device)
-            batch_images = batch_images.to(device)
-            batch_pred_density_maps = model(batch_images)
-
-            batch_pred_counts = batch_pred_density_maps.sum(dim=(1, 2, 3)).cpu()
-            batch_gt_count = batch_gt_count.cpu()
-            batch_differences = batch_pred_counts - batch_gt_count
-
-            del batch_pred_density_maps, batch_images
-            torch.cuda.empty_cache()
+            try:
+                # Process one image at a time
+                for i in range(len(batch_images)):
+                    # Process single image
+                    single_image = batch_images[i:i+1].to(device)
+                    gt_count = torch.tensor([len(batch_labels[i])], 
+                                          dtype=torch.float32, 
+                                          device='cpu')
+                    
+                    # Forward pass
+                    pred_density_map = model(single_image)
+                    pred_count = pred_density_map.sum(dim=(1,2,3)).cpu()
+                    
+                    # Calculate metrics on CPU
+                    difference = pred_count - gt_count
+                    
+                    # Update metrics
+                    test_mae.update(torch.abs(difference).sum().item(), n=1)
+                    test_rmse.update(torch.sum(difference ** 2).item(), n=1)
+                    
+                    # Clear memory
+                    del single_image, pred_density_map, pred_count
+                    torch.cuda.empty_cache()
+                    
+            except RuntimeError as e:
+                print(f"Error processing batch at step {step}: {e}")
+                continue
+            
+            if step % 10 == 0:  # Print progress every 10 batches
+                print(f"Processed {step} batches")
+                
+            # Aggressive memory clearing
             gc.collect()
+            torch.cuda.empty_cache()
 
-            batch_size = batch_pred_counts.shape[0]
-            test_mae.update(torch.abs(batch_differences).sum().item(), n=batch_size)
-            test_rmse.update(torch.sum(batch_differences ** 2).item(), n=batch_size)
-
-    average_mae = test_mae.get_average()
-    average_rmse = torch.sqrt(torch.tensor(test_rmse.get_average())).item()
-       
-    return average_mae, average_rmse
+    mae = test_mae.get_average()
+    rmse = math.sqrt(test_rmse.get_average())
+    
+    return mae, rmse
 
 def main():
     args = parse_test_args()
@@ -73,18 +98,33 @@ def main():
     loader_A = DataLoader(dataset_A, batch_size=1, shuffle=False, num_workers=args.num_workers)
     loader_C = DataLoader(dataset_C, batch_size=1, shuffle=False, num_workers=args.num_workers)
 
-    # Clear GPU memory before starting tests
-    torch.cuda.empty_cache()
-    gc.collect()
-
-    # Test on region A
-    mae_A, rmse_A = test_model(model, loader_A, device)
-    # Clear memory between tests
+    # Try to optimize CUDA memory allocation
+    torch.cuda.set_per_process_memory_fraction(0.8)  # Use only 80% of available GPU memory
+    torch.backends.cudnn.benchmark = True
+    
+    # Clear memory before starting
     torch.cuda.empty_cache()
     gc.collect()
     
-    # Test on region C
-    mae_C, rmse_C = test_model(model, loader_C, device)
+    try:
+        # Test on region A
+        mae_A, rmse_A = test_model(model, loader_A, device)
+        
+        # Aggressive memory clearing between regions
+        del model
+        torch.cuda.empty_cache()
+        gc.collect()
+        
+        # Reload model for region C
+        model = load_model(args.model_dir, device)
+        model = model.to(device)
+        
+        # Test on region C
+        mae_C, rmse_C = test_model(model, loader_C, device)
+        
+    except Exception as e:
+        print(f"Error during testing: {e}")
+        raise
     
     # Calculate combined metrics
     total_count = len(dataset_A) + len(dataset_C)
