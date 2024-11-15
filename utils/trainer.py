@@ -16,8 +16,7 @@ from datasets.tree_counting_dataset import TreeCountingDataset
 import torch.nn.functional as F
 from torch.nn import MSELoss
 from utils.losses import combined_loss
-from utils.helper import RunningAverageTracker
-import time
+
 
 class Trainer(ABC):
     def __init__(self, config):
@@ -225,41 +224,9 @@ class Trainer(ABC):
     def train_epoch(self, epoch):
         pass
     
+    @abstractmethod
     def validate_epoch(self, epoch):
-        epoch_loss = RunningAverageTracker()
-        epoch_mae = RunningAverageTracker()
-        epoch_rmse = RunningAverageTracker()
-        start_time = time.time()
-        self.model.eval()
-
-        for batch_images, batch_labels, batch_names in self.dataloaders['val']:
-            batch_gt_count = torch.tensor([len(p) for p in batch_labels], dtype=torch.float32, device=self.device)
-            batch_images = batch_images.to(self.device)
-            batch_labels = [p.to(self.device) for p in batch_labels]
-
-            with torch.set_grad_enabled(False):
-                batch_pred_density_maps = self.model(batch_images)
-                batch_gt_density_maps = self.refiner(batch_images, batch_labels)
-
-                # Compute loss
-                loss = self.loss_function(batch_pred_density_maps, batch_gt_density_maps)
-
-                # The number of trees is total sum of all prediction pixels
-                batch_pred_counts = batch_pred_density_maps.sum(dim=(1, 2, 3)).detach()
-                batch_differences = batch_pred_counts - batch_gt_count
-
-                # Update loss, MAE, and RMSE metrics
-                batch_size = batch_pred_counts.shape[0]
-                epoch_loss.update(loss.item(), batch_size)
-                epoch_mae.update(torch.abs(batch_differences).sum().item(), batch_size)
-                epoch_rmse.update(torch.sum(batch_differences ** 2).item(), batch_size)
-
-        average_loss = epoch_loss.get_average()
-        average_mae = epoch_mae.get_average()
-        average_rmse = torch.sqrt(torch.tensor(epoch_rmse.get_average())).item()
-        logging.info(f'Validation: Loss: {average_loss:.2f}, RMSE: {average_rmse:.2f}, MAE: {average_mae:.2f}, Cost {time.time() - start_time:.1f} sec')
-
-        return average_loss, average_rmse, average_mae
+        pass
     
 
     @staticmethod
@@ -269,4 +236,3 @@ class Trainer(ABC):
         labels = transposed_batch[1] 
         path = transposed_batch[2]
         return images, labels, path
-
