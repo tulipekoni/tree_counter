@@ -3,13 +3,13 @@ import torch.nn as nn
 from models.StaticRefiner import StaticRefiner
 
 class AdaptiveRefiner(StaticRefiner):
-    def __init__(self, device):
+    def __init__(self, device, config):
         super().__init__(device, sigma=15.0)  # Initialize parent first
         self.sigma_param = nn.Parameter(torch.tensor(15.0, device=device))
         self._cached_sigma = None
         self._cached_kernel = None
         
-        self.optimizer = torch.optim.Adam([self.sigma_param], lr=1e-3)
+        self.optimizer = torch.optim.Adam([self.sigma_param], lr=config['refiner_lr'])
 
     def _update_kernel(self):
         if self._cached_sigma != self.sigma_param.item():
@@ -29,8 +29,9 @@ class AdaptiveRefiner(StaticRefiner):
         return self.sigma_param.item()
 
     def step(self):
+        torch.nn.utils.clip_grad_norm_([self.sigma_param], max_norm=1.0)
         self.optimizer.step()
-        self.optimizer.zero_grad() 
+        self.optimizer.zero_grad()
 
     def train(self, mode=True):
         super().train(mode)

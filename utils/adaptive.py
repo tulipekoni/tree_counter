@@ -14,7 +14,7 @@ class Adaptive(Trainer):
 
     def setup(self):
         super().setup()
-        self.refiner = AdaptiveRefiner(device=self.device)
+        self.refiner = AdaptiveRefiner(device=self.device, config=self.config)
         self.refiner.to(self.device)
         
         # Initialize optimizer with both model and refiner parameters
@@ -60,6 +60,7 @@ class Adaptive(Trainer):
                 
                 # Update parameters
                 self.optimizer.step()
+                self.refiner.step()
 
                 # Calculate metrics
                 batch_pred_counts = batch_pred_density_maps.sum(dim=(1, 2, 3)).detach()
