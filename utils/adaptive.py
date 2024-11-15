@@ -121,7 +121,6 @@ class Adaptive(Trainer):
             checkpoint = torch.load(checkpoint_path, map_location=self.device)
             
             # Load only model weights and optimizer
-            self.sigma = checkpoint['sigma_state_dict']
             self.model.load_state_dict(checkpoint['model_state_dict'])
             self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
             self.lr_scheduler.load_state_dict(checkpoint['lr_scheduler_state_dict'])
