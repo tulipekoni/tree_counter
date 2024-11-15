@@ -164,9 +164,26 @@ class Adaptive(Trainer):
             # Load checkpoint with weights_only=True
             checkpoint = torch.load(checkpoint_path, map_location=self.device, weights_only=True)
             
-            # Load all training state
+            # Load model and optimizer states
+            if 'model_state_dict' in checkpoint:
+                self.model.load_state_dict(checkpoint['model_state_dict'])
             if 'sigma_state_dict' in checkpoint:
                 self.refiner.sigma_param.data = checkpoint['sigma_state_dict'].to(self.device)
+                
+            # Recreate optimizer with current parameters before loading state
+            params = list(self.model.parameters()) + list(self.refiner.parameters())
+            self.optimizer = torch.optim.Adam(params, lr=self.config['lr'])
+            
+            # Now load optimizer state
+            if 'optimizer_state_dict' in checkpoint:
+                try:
+                    self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+                except ValueError as e:
+                    logging.warning(f"Failed to load optimizer state: {e}. Starting with fresh optimizer.")
+            
+            if 'lr_scheduler_state_dict' in checkpoint:
+                self.lr_scheduler.load_state_dict(checkpoint['lr_scheduler_state_dict'])
+            
             self.start_epoch = checkpoint.get('epoch', 0) + 1
             self.val_maes = checkpoint.get('val_maes', [])
             self.val_rmses = checkpoint.get('val_rmses', [])
@@ -177,14 +194,6 @@ class Adaptive(Trainer):
             
             self.best_val_rmse = checkpoint.get('best_val_rmse', np.inf)
             self.best_val_mae = checkpoint.get('best_val_mae', np.inf)
-            
-            # Load model and optimizer states
-            if 'model_state_dict' in checkpoint:
-                self.model.load_state_dict(checkpoint['model_state_dict'])
-            if 'optimizer_state_dict' in checkpoint:
-                self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-            if 'lr_scheduler_state_dict' in checkpoint:
-                self.lr_scheduler.load_state_dict(checkpoint['lr_scheduler_state_dict'])
             
             logging.info(f"Training resumed from checkpoint! Current sigma: {self.refiner.get_sigma():.2f}")
             
