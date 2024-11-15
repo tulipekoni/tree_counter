@@ -130,7 +130,7 @@ class Trainer(ABC):
         self.graph, (self.ax1, self.ax2, self.ax3) = plt.subplots(3, 1, figsize=(10, 15))
 
         # Load checkpoint if we are continuing training
-        if config['resume']:
+        if config['resume'] or config['model_dir']:
             self.load_checkpoint()
             self._update_graph(self.start_epoch-1)       
     

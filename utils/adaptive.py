@@ -132,7 +132,7 @@ class Adaptive(Trainer):
             logging.info(f"Model weights loaded! Current sigma: {self.sigma.item():.2f}")
             
         else:
-            # Original checkpoint loading logic
+            # Load everything
             checkpoint_files = [f for f in os.listdir(config['resume']) if f.endswith('.tar')]
             if not checkpoint_files:
                 raise FileNotFoundError(f"No .tar checkpoint files found in {config['resume']}")
