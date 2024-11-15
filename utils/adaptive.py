@@ -10,13 +10,14 @@ from models.StaticRefiner import StaticRefiner
 
 class Adaptive(Trainer):
     def __init__(self, config):
-        # Initialize with a learnable sigma parameter
-        self.sigma = torch.nn.Parameter(torch.tensor(15.0))
+        # Initialize sigma after super().__init__ so we know the device
         super().__init__(config)
+        # Initialize with a learnable sigma parameter on the correct device
+        self.sigma = torch.nn.Parameter(torch.tensor(15.0, device=self.device))
 
     def setup(self):
         super().setup()
-        # Create refiner with the learnable sigma parameter directly, not its value
+        # Create refiner with the sigma parameter
         self.refiner = StaticRefiner(device=self.device, sigma=self.sigma)
         self.refiner.to(self.device)
         
@@ -107,14 +108,13 @@ class Adaptive(Trainer):
         config = self.config
         
         if config['model_dir']:
-            # Load only model weights when model_dir is specified
             checkpoint_files = [f for f in os.listdir(config['model_dir']) if f.endswith('.tar')]
             if not checkpoint_files:
                 raise FileNotFoundError(f"No .tar checkpoint files found in {config['model_dir']}")
             
             latest_checkpoint = max(checkpoint_files, key=lambda f: os.path.getmtime(os.path.join(config['model_dir'], f)))
             checkpoint_path = os.path.join(config['model_dir'], latest_checkpoint)
-            checkpoint = torch.load(checkpoint_path, map_location=self.device)
+            checkpoint = torch.load(checkpoint_path, map_location=self.device, weights_only=True)
             
             # Load only model weights and optimizer
             self.model.load_state_dict(checkpoint['model_state_dict'])
@@ -127,14 +127,13 @@ class Adaptive(Trainer):
             logging.info(f"Model weights loaded! Current sigma: {self.sigma.item():.2f}")
             
         else:
-            # Load everything
             checkpoint_files = [f for f in os.listdir(config['resume']) if f.endswith('.tar')]
             if not checkpoint_files:
                 raise FileNotFoundError(f"No .tar checkpoint files found in {config['resume']}")
             
             latest_checkpoint = max(checkpoint_files, key=lambda f: os.path.getmtime(os.path.join(config['resume'], f)))
             checkpoint_path = os.path.join(config['resume'], latest_checkpoint)
-            checkpoint = torch.load(checkpoint_path, map_location=self.device)
+            checkpoint = torch.load(checkpoint_path, map_location=self.device, weights_only=True)
             
             # Load everything
             self.sigma = checkpoint['sigma_state_dict']
