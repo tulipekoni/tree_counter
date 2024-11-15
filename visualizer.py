@@ -89,8 +89,31 @@ def main():
         gt_density_map_display = (gt_density_map_display * 255).astype(np.uint8)
         gt_density_map_display = cv2.applyColorMap(gt_density_map_display, cv2.COLORMAP_JET)
 
+        # Add labels and counts to the images
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        font_scale = 0.7  # Smaller text
+        font_thickness = 2
+        padding = 30  # Slightly reduced padding
+        
+        # Create blank space for text
+        text_space = np.ones((padding, image_np.shape[1], 3), dtype=np.uint8) * 255
+        image_with_label = np.vstack([text_space, image_np])
+        gt_with_label = np.vstack([text_space, gt_density_map_display])
+        pred_with_label = np.vstack([text_space, pred_density_map_display])
+        
+        # Function to center text
+        def put_centered_text(img, text, y_pos):
+            text_size = cv2.getTextSize(text, font, font_scale, font_thickness)[0]
+            text_x = (img.shape[1] - text_size[0]) // 2
+            cv2.putText(img, text, (text_x, y_pos), font, font_scale, (0, 0, 0), font_thickness, cv2.LINE_AA)
+        
+        # Add centered text to each image
+        put_centered_text(image_with_label, 'subimage', 20)
+        put_centered_text(gt_with_label, f'Ground Truth (Count: {gt_count:.1f})', 20)
+        put_centered_text(pred_with_label, f'Prediction (Count: {pred_count:.1f})', 20)
+        
         # Combine images side by side
-        combined_image = np.hstack((image_np, gt_density_map_display, pred_density_map_display))
+        combined_image = np.hstack((image_with_label, gt_with_label, pred_with_label))
 
         # Calculate losses
         loss = combined_loss(pred_density_map, gt_density_map)
@@ -101,11 +124,15 @@ def main():
         print(f'Ground Truth Count: {gt_count:.2f}')
         print(f'Predicted Count: {pred_count:.2f}')
         print(f'Difference: {difference:.2f}')
-        print("Press Enter to display a new image, or press Esc to exit.")
+        print("Press Enter to display a new image, press S to save, or press Esc to exit.")
 
         key = cv2.waitKey(0)
         if key == 27:  # Esc key to stop
             break
+        elif key == ord('s'):  # S key to save
+            save_path = f'visualization_{name}.png'
+            cv2.imwrite(save_path, combined_image)
+            print(f'Saved visualization to {save_path}')
         elif key == 13:  # Enter key to continue
             continue
         else:
