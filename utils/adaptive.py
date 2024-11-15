@@ -10,19 +10,25 @@ from models.StaticRefiner import StaticRefiner
 
 class Adaptive(Trainer):
     def __init__(self, config):
-        # Initialize sigma after super().__init__ so we know the device
+        # First call super().__init__ without creating sigma
         super().__init__(config)
-        # Initialize with a learnable sigma parameter on the correct device
-        self.sigma = torch.nn.Parameter(torch.tensor(15.0, device=config['device']))
-
-    def setup(self):
-        super().setup()
+        
+        # Call setup() to ensure device is initialized
+        self.setup()
+        
+        # Now we can safely create sigma on the correct device
+        self.sigma = torch.nn.Parameter(torch.tensor(15.0, device=self.device))
+        
         # Create refiner with the sigma parameter
         self.refiner = StaticRefiner(device=self.device, sigma=self.sigma)
         self.refiner.to(self.device)
         
         # Add sigma to optimizer parameters
         self.sigma_optimizer = torch.optim.Adam([self.sigma], lr=self.config.get('sigma_lr', 1e-3))
+
+    def setup(self):
+        # Call parent's setup to initialize device and other components
+        super().setup()
 
     def train_epoch(self, epoch):
         epoch_loss = RunningAverageTracker()
