@@ -10,14 +10,14 @@ from models.StaticRefiner import StaticRefiner
 
 class Adaptive(Trainer):
     def __init__(self, config):
-        # First call super().__init__ without creating sigma
+        # First create sigma before any setup
+        self.sigma = torch.nn.Parameter(torch.tensor(15.0))  # Create on CPU first
+        
+        # Call parent's init
         super().__init__(config)
         
-        # Call setup() to ensure device is initialized
+        # Now call setup which will move everything to the correct device
         self.setup()
-        
-        # Now we can safely create sigma on the correct device
-        self.sigma = torch.nn.Parameter(torch.tensor(15.0, device=self.device))
         
         # Create refiner with the sigma parameter
         self.refiner = StaticRefiner(device=self.device, sigma=self.sigma)
@@ -29,6 +29,16 @@ class Adaptive(Trainer):
     def setup(self):
         # Call parent's setup to initialize device and other components
         super().setup()
+        
+        # Move sigma to the correct device
+        self.sigma = self.sigma.to(self.device)
+        
+        # Create refiner with the sigma parameter
+        self.refiner = StaticRefiner(device=self.device, sigma=self.sigma)
+        self.refiner.to(self.device)
+        
+        # Add sigma to optimizer parameters
+        self.sigma_optimizer = torch.optim.Adam([self.sigma], lr=self.config.get('sigma_lr', 1e-3))
 
     def train_epoch(self, epoch):
         epoch_loss = RunningAverageTracker()
@@ -129,6 +139,9 @@ class Adaptive(Trainer):
             
             # Start from epoch 0
             self.start_epoch = 0
+            
+            if 'sigma_state_dict' in checkpoint:
+                self.sigma.data = checkpoint['sigma_state_dict'].data
             
             logging.info(f"Model weights loaded! Current sigma: {self.sigma.item():.2f}")
             
