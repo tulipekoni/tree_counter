@@ -9,7 +9,7 @@ class AdaptiveRefiner(StaticRefiner):
         self._cached_sigma = None
         self._cached_kernel = None
         
-        self.optimizer = torch.optim.Adam([self.sigma_param], lr=config['refiner_lr'])
+        self.optimizer = torch.optim.Adam([self.sigma_param], lr=config['sigma_lr'])
 
     def _update_kernel(self):
         if self._cached_sigma != self.sigma_param.item():
