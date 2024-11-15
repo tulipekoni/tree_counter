@@ -13,7 +13,7 @@ class Adaptive(Trainer):
         # Initialize sigma after super().__init__ so we know the device
         super().__init__(config)
         # Initialize with a learnable sigma parameter on the correct device
-        self.sigma = torch.nn.Parameter(torch.tensor(15.0, device=self.device))
+        self.sigma = torch.nn.Parameter(torch.tensor(15.0, device=config['device']))
 
     def setup(self):
         super().setup()
