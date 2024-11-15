@@ -56,7 +56,7 @@ class Adaptive(Trainer):
                 loss = self.loss_function(batch_pred_density_maps, batch_gt_density_maps)
                 
                 # Backward pass
-                loss.backward()
+                loss.backward(retain_graph=True)
                 
                 # Update parameters
                 self.optimizer.step()

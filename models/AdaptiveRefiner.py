@@ -5,7 +5,7 @@ from models.StaticRefiner import StaticRefiner
 class AdaptiveRefiner(StaticRefiner):
     def __init__(self, device, config):
         super().__init__(device, sigma=15.0)  # Initialize parent first
-        self.sigma_param = nn.Parameter(torch.tensor(15.0, device=device))
+        self.sigma_param = nn.Parameter(torch.tensor(15.0, device=device, requires_grad=True))
         self._cached_sigma = None
         self._cached_kernel = None
         
@@ -31,6 +31,10 @@ class AdaptiveRefiner(StaticRefiner):
     def step(self):
         torch.nn.utils.clip_grad_norm_([self.sigma_param], max_norm=1.0)
         self.optimizer.step()
+        
+        with torch.no_grad():
+            self.sigma_param.clamp_(min=1.0, max=30.0)
+        
         self.optimizer.zero_grad()
 
     def train(self, mode=True):
