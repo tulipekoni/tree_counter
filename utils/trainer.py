@@ -112,13 +112,7 @@ class Trainer(ABC):
         self.model.to(self.device)
         
         self.loss_function = combined_loss
-                
-        # Optimizer setup
-        params = list(self.model.parameters())
-        self.optimizer = Adam(params, lr=config['lr'], weight_decay=config['weight_decay'])
-        
-        # Scheduler setup
-        self.lr_scheduler = lr_scheduler.StepLR(self.optimizer, step_size=config['lr_step_size'], gamma=config['lr_gamma'])
+
 
         self.list_of_best_models = ModelSaver(max_count=config['max_saved_model_count'])
         

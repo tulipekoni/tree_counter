@@ -5,7 +5,7 @@ from models.StaticRefiner import StaticRefiner
 class AdaptiveRefiner(StaticRefiner):
     def __init__(self, device, config):
         super().__init__(device, sigma=15.0)  # Initialize parent first
-        self.sigma_param = nn.Parameter(torch.tensor(15.0, device=device, requires_grad=True))
+        self.sigma_param = nn.Parameter(torch.tensor(15.0, device=device))
         self._cached_sigma = None
         self._cached_kernel = None
         
