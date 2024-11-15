@@ -16,8 +16,8 @@ class Adaptive(Trainer):
 
     def setup(self):
         super().setup()
-        # Create refiner with the learnable sigma
-        self.refiner = StaticRefiner(device=self.device, sigma=self.sigma.item())
+        # Create refiner with the learnable sigma parameter directly, not its value
+        self.refiner = StaticRefiner(device=self.device, sigma=self.sigma)
         self.refiner.to(self.device)
         
         # Add sigma to optimizer parameters
@@ -40,10 +40,6 @@ class Adaptive(Trainer):
                 # Zero all gradients
                 self.optimizer.zero_grad()
                 self.sigma_optimizer.zero_grad()
-
-                # Update refiner with current sigma
-                self.refiner = StaticRefiner(device=self.device, sigma=self.sigma.item())
-                self.refiner.to(self.device)
 
                 # Forward pass
                 batch_pred_density_maps = self.model(batch_images)
