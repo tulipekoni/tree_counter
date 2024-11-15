@@ -28,6 +28,10 @@ class Adaptive(Trainer):
             gamma=self.config['lr_gamma']
         )
 
+        # Load checkpoint if we are continuing training
+        if self.config['resume'] or self.config['model_dir']:
+            self.load_checkpoint()
+
     def train_epoch(self, epoch):
         epoch_loss = RunningAverageTracker()
         epoch_mae = RunningAverageTracker()
