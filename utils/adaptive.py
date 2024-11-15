@@ -110,29 +110,53 @@ class Adaptive(Trainer):
     def load_checkpoint(self):
         config = self.config
         
-        checkpoint_files = [f for f in os.listdir(config['resume']) if f.endswith('.tar')]
-        if not checkpoint_files:
-            raise FileNotFoundError(f"No .tar checkpoint files found in {config['resume']}")
-        
-        latest_checkpoint = max(checkpoint_files, key=lambda f: os.path.getmtime(os.path.join(config['resume'], f)))
-        checkpoint_path = os.path.join(config['resume'], latest_checkpoint)
-        checkpoint = torch.load(checkpoint_path, map_location=self.device)
-        
-        self.sigma = checkpoint['sigma_state_dict']
-        self.start_epoch = checkpoint['epoch'] + 1
-        self.val_maes = checkpoint['val_maes']
-        self.val_rmses = checkpoint['val_rmses']
-        self.val_losses = checkpoint['val_losses']
-        self.train_maes = checkpoint['train_maes']
-        self.train_rmses = checkpoint['train_rmses']
-        self.train_losses = checkpoint['train_losses']
-        
-        self.best_val_rmse = checkpoint['best_val_rmse']
-        self.best_val_mae = checkpoint['best_val_mae']
-        
-        self.model.load_state_dict(checkpoint['model_state_dict'])
-        self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-        self.sigma_optimizer.load_state_dict(checkpoint['sigma_optimizer_state_dict'])
-        self.lr_scheduler.load_state_dict(checkpoint['lr_scheduler_state_dict'])
-
-        logging.info(f"Checkpoint loaded! Current sigma: {self.sigma.item():.2f}") 
+        if config['model_dir']:
+            # Load only model weights when model_dir is specified
+            checkpoint_files = [f for f in os.listdir(config['model_dir']) if f.endswith('.tar')]
+            if not checkpoint_files:
+                raise FileNotFoundError(f"No .tar checkpoint files found in {config['model_dir']}")
+            
+            latest_checkpoint = max(checkpoint_files, key=lambda f: os.path.getmtime(os.path.join(config['model_dir'], f)))
+            checkpoint_path = os.path.join(config['model_dir'], latest_checkpoint)
+            checkpoint = torch.load(checkpoint_path, map_location=self.device)
+            
+            # Load only model weights and optimizer
+            self.sigma = checkpoint['sigma_state_dict']
+            self.model.load_state_dict(checkpoint['model_state_dict'])
+            self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+            self.lr_scheduler.load_state_dict(checkpoint['lr_scheduler_state_dict'])
+            
+            # Start from epoch 0
+            self.start_epoch = 0
+            
+            logging.info(f"Model weights loaded! Current sigma: {self.sigma.item():.2f}")
+            
+        else:
+            # Original checkpoint loading logic
+            checkpoint_files = [f for f in os.listdir(config['resume']) if f.endswith('.tar')]
+            if not checkpoint_files:
+                raise FileNotFoundError(f"No .tar checkpoint files found in {config['resume']}")
+            
+            latest_checkpoint = max(checkpoint_files, key=lambda f: os.path.getmtime(os.path.join(config['resume'], f)))
+            checkpoint_path = os.path.join(config['resume'], latest_checkpoint)
+            checkpoint = torch.load(checkpoint_path, map_location=self.device)
+            
+            # Load everything
+            self.sigma = checkpoint['sigma_state_dict']
+            self.start_epoch = checkpoint['epoch'] + 1
+            self.val_maes = checkpoint['val_maes']
+            self.val_rmses = checkpoint['val_rmses']
+            self.val_losses = checkpoint['val_losses']
+            self.train_maes = checkpoint['train_maes']
+            self.train_rmses = checkpoint['train_rmses']
+            self.train_losses = checkpoint['train_losses']
+            
+            self.best_val_rmse = checkpoint['best_val_rmse']
+            self.best_val_mae = checkpoint['best_val_mae']
+            
+            self.model.load_state_dict(checkpoint['model_state_dict'])
+            self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+            self.sigma_optimizer.load_state_dict(checkpoint['sigma_optimizer_state_dict'])
+            self.lr_scheduler.load_state_dict(checkpoint['lr_scheduler_state_dict'])
+            
+            logging.info(f"Checkpoint loaded! Current sigma: {self.sigma.item():.2f}")

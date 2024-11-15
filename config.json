@@ -1,6 +1,7 @@
 {
     "save_dir": "./checkpoints",
     "data_dir": "./processed_data",
+    "model_dir": "./checkpoints/phase_1",
     "resume": "",
     "device": "0",
     "num_workers": 8,
