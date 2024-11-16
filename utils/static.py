@@ -18,22 +18,6 @@ class Static(Trainer):
         self.refiner = StaticRefiner(device=self.device, sigma=self.sigma)
         self.refiner.to(self.device)
         
-        # Initialize optimizer with both model and refiner parameters
-        params = list(self.model.parameters())
-        self.optimizer = torch.optim.Adam(params, lr=self.config['lr'])
-        
-        # Scheduler setup
-        self.lr_scheduler = torch.optim.lr_scheduler.StepLR(
-            self.optimizer, 
-            step_size=self.config['lr_step_size'], 
-            gamma=self.config['lr_gamma']
-        )
-        
-        # Load checkpoint if we are continuing training
-        if self.config['resume'] or self.config['model_dir']:
-            self.load_checkpoint()
-
-        
     def train_epoch(self, epoch):
         epoch_loss = RunningAverageTracker()
         epoch_mae = RunningAverageTracker()

@@ -110,14 +110,28 @@ class Trainer(ABC):
         # Model setup
         self.model = UNet()
         self.model.to(self.device)
+        
         self.loss_function = combined_loss
+                
+        # Optimizer setup
+        params = list(self.model.parameters())
+        self.optimizer = Adam(params, lr=config['lr'], weight_decay=config['weight_decay'])
+        
+        # Scheduler setup
+        self.lr_scheduler = lr_scheduler.StepLR(self.optimizer, step_size=config['lr_step_size'], gamma=config['lr_gamma'])
+
         self.list_of_best_models = ModelSaver(max_count=config['max_saved_model_count'])
         
         self.start_epoch = 0        
         self.best_val_mae = np.inf
         self.best_val_rmse = np.inf
         
-        self.graph, (self.ax1, self.ax2, self.ax3) = plt.subplots(3, 1, figsize=(10, 15))      
+        self.graph, (self.ax1, self.ax2, self.ax3) = plt.subplots(3, 1, figsize=(10, 15))
+
+        # Load checkpoint if we are continuing training
+        if config['resume']:
+            self.load_checkpoint()
+            self._update_graph(self.start_epoch-1)       
     
     def _get_moving_average(self, queue, new_value):
         """Calculate moving average with the new value"""

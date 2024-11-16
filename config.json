@@ -1,8 +1,8 @@
 {
     "save_dir": "./checkpoints",
     "data_dir": "./processed_data",
-    "model_dir": "./checkpoints/phase_1",
-    "resume": "",
+    "resume": "./checkpoints/phase_1",
+    "load_weights_only": true,
     "device": "0",
     "num_workers": 8,
     "batch_size": 16,
@@ -11,7 +11,7 @@
     "max_saved_model_count": 1,
     
     "lr": 5e-3,
-    "sigma_lr": 1e-1,
+    "refiner_lr": 1e-1,
     "lr_gamma": 0.5,
     "lr_step_size": 50,
 

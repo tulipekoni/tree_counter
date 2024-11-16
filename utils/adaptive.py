@@ -3,44 +3,37 @@ import time
 import torch
 import logging
 import numpy as np
-import torch.utils.data.dataloader
 from utils.trainer import Trainer
+import torch.utils.data.dataloader
+from torch.optim import lr_scheduler, Adam
 from utils.helper import RunningAverageTracker
 from models.AdaptiveRefiner import AdaptiveRefiner
 
 class Adaptive(Trainer):
     def __init__(self, config):
+        self.initial_sigma = 15
         super().__init__(config)
 
     def setup(self):
+        # Call parent setup which creates model, model_optimizer, and lr_scheduler
         super().setup()
-        self.refiner = AdaptiveRefiner(device=self.device, config=self.config)
+        config = self.config
+        # Setup refiner and its optimizer
+        self.refiner = AdaptiveRefiner(device=self.device, initial_sigma=self.initial_sigma)
         self.refiner.to(self.device)
         
-        # Initialize optimizer with both model and refiner parameters
-        params = list(self.model.parameters()) + list(self.refiner.parameters())
-        self.optimizer = torch.optim.Adam(params, lr=self.config['lr'])
-        
-        # Scheduler setup
-        self.lr_scheduler = torch.optim.lr_scheduler.StepLR(
-            self.optimizer, 
-            step_size=self.config['lr_step_size'], 
-            gamma=self.config['lr_gamma']
-        )
-
-        # Load checkpoint if we are continuing training
-        if self.config['resume'] or self.config['model_dir']:
-            self.load_checkpoint()
+        # Only create optimizer for refiner (model optimizer is handled by parent)
+        params = self.refiner.parameters()
+        self.refiner_optimizer = Adam(params, lr=config['refiner_lr'])
+        self.refiner_lr_scheduler = lr_scheduler.StepLR(self.refiner_optimizer, step_size=config['lr_step_size'], gamma=config['lr_gamma'])
 
     def train_epoch(self, epoch):
         epoch_loss = RunningAverageTracker()
         epoch_mae = RunningAverageTracker()
         epoch_rmse = RunningAverageTracker()
         start_time = time.time()
-        
-        # Set train mode
         self.model.train()
-        self.refiner.train()
+        self.refiner.train() 
 
         # Iterate over data
         for step, (batch_images, batch_labels, batch_names) in enumerate(self.dataloaders['train']):
@@ -49,28 +42,25 @@ class Adaptive(Trainer):
             batch_labels = [p.to(self.device) for p in batch_labels]
 
             with torch.set_grad_enabled(True):
-                # Zero all gradients
+                # Zero both optimizers
                 self.optimizer.zero_grad()
-
-                # Forward pass
-                batch_pred_density_maps = self.model(batch_images)
+                self.refiner_optimizer.zero_grad()
+                
+                batch_pred_density_maps = self.model(batch_images) 
                 batch_gt_density_maps = self.refiner(batch_images, batch_labels)
 
-                # Calculate loss
                 loss = self.loss_function(batch_pred_density_maps, batch_gt_density_maps)
+                loss.backward() 
                 
-                # Backward pass
-                loss.backward()
-                
-                # Update parameters
+                # Step both optimizers 
                 self.optimizer.step()
-                self.refiner.step()
+                self.refiner_optimizer.step()
 
-                # Calculate metrics
-                batch_pred_counts = batch_pred_density_maps.sum(dim=(1, 2, 3)).detach()
-                batch_differences = batch_pred_counts - batch_gt_count
+                # The number of trees is total sum of all prediction pixels
+                batch_pred_counts = batch_pred_density_maps.sum(dim=(1, 2, 3)).detach()  
+                batch_differences = batch_pred_counts - batch_gt_count 
 
-                # Update metrics
+                # Update loss, MAE, and RMSE metrics
                 batch_size = batch_pred_counts.shape[0]
                 epoch_loss.update(loss.item(), batch_size)
                 epoch_mae.update(torch.abs(batch_differences).sum().item(), batch_size)
@@ -79,19 +69,17 @@ class Adaptive(Trainer):
         average_loss = epoch_loss.get_average()
         average_mae = epoch_mae.get_average()
         average_rmse = torch.sqrt(torch.tensor(epoch_rmse.get_average())).item()
-        
-        logging.info(f'Training: Loss: {average_loss:.2f}, RMSE: {average_rmse:.2f}, MAE: {average_mae:.2f}, '
-                    f'Sigma: {self.refiner.get_sigma():.2f}, Cost {time.time() - start_time:.1f} sec')
+        logging.info(f'Training: Loss: {average_loss:.2f}, RMSE: {average_rmse:.2f}, MAE: {average_mae:.2f}, Cost {time.time() - start_time:.1f} sec') 
 
         return average_loss, average_rmse, average_mae
-
+    
     def validate_epoch(self, epoch):
         epoch_loss = RunningAverageTracker()
         epoch_mae = RunningAverageTracker()
         epoch_rmse = RunningAverageTracker()
         start_time = time.time()
         
-        # Set eval mode
+        # Set both model and refiner to eval mode
         self.model.eval()
         self.refiner.eval()
 
@@ -107,11 +95,11 @@ class Adaptive(Trainer):
                 # Compute loss
                 loss = self.loss_function(batch_pred_density_maps, batch_gt_density_maps)
 
-                # Calculate predicted counts and differences
+                # The number of trees is total sum of all prediction pixels
                 batch_pred_counts = batch_pred_density_maps.sum(dim=(1, 2, 3)).detach()
                 batch_differences = batch_pred_counts - batch_gt_count
 
-                # Update metrics
+                # Update loss, MAE, and RMSE metrics
                 batch_size = batch_pred_counts.shape[0]
                 epoch_loss.update(loss.item(), batch_size)
                 epoch_mae.update(torch.abs(batch_differences).sum().item(), batch_size)
@@ -120,15 +108,15 @@ class Adaptive(Trainer):
         average_loss = epoch_loss.get_average()
         average_mae = epoch_mae.get_average()
         average_rmse = torch.sqrt(torch.tensor(epoch_rmse.get_average())).item()
-        logging.info(f'Validation: Loss: {average_loss:.2f}, RMSE: {average_rmse:.2f}, MAE: {average_mae:.2f}, '
-                    f'Sigma: {self.refiner.get_sigma():.2f}, Cost {time.time() - start_time:.1f} sec')
+        logging.info(f'Validation: Loss: {average_loss:.2f}, RMSE: {average_rmse:.2f}, MAE: {average_mae:.2f}, Cost {time.time() - start_time:.1f} sec')
+        logging.info(f'Current sigma value: {self.refiner.sigma.item():.2f}')
 
         return average_loss, average_rmse, average_mae
-
+        
     def save_checkpoint(self, epoch):
         checkpoint = {
             'epoch': epoch,
-            'sigma': self.refiner.get_sigma(),
+            'sigma': self.refiner.sigma.item(),
             'val_maes': self.val_maes,
             'val_rmses': self.val_rmses,
             'val_losses': self.val_losses,
@@ -140,79 +128,63 @@ class Adaptive(Trainer):
             'best_val_rmse': self.best_val_rmse,
             
             'model_state_dict': self.model.state_dict(),
+            'refiner_state_dict': self.refiner.state_dict(),
             'optimizer_state_dict': self.optimizer.state_dict(),
+            'refiner_optimizer_state_dict': self.refiner_optimizer.state_dict(),
             'lr_scheduler_state_dict': self.lr_scheduler.state_dict(),
-            'sigma_state_dict': self.refiner.sigma_param,
+            'refiner_lr_scheduler_state_dict': self.refiner_lr_scheduler.state_dict(),
         }
         save_path = os.path.join(self.save_dir, f'checkpoint_epoch_{epoch}.tar')
         self.list_of_best_models.append(save_path)
         torch.save(checkpoint, save_path)
-        logging.info(f"Checkpoint saved! Current sigma: {self.refiner.get_sigma():.2f}")
+        logging.info(f"Checkpoint saved!")
+        pass
 
     def load_checkpoint(self):
         config = self.config
         
-        if config['resume']:
-            # Full training resume - load everything
-            checkpoint_files = [f for f in os.listdir(config['resume']) if f.endswith('.tar')]
-            if not checkpoint_files:
-                raise FileNotFoundError(f"No .tar checkpoint files found in {config['resume']}")
+        # Check for checkpoint files
+        checkpoint_files = [f for f in os.listdir(config['resume']) if f.endswith('.tar')]
+        if not checkpoint_files:
+            raise FileNotFoundError(f"No .tar checkpoint files found in {config['resume']}")
+        
+        latest_checkpoint = max(checkpoint_files, key=lambda f: os.path.getmtime(os.path.join(config['resume'], f)))
+        checkpoint_path = os.path.join(config['resume'], latest_checkpoint)
+        checkpoint = torch.load(checkpoint_path, map_location=self.device, weights_only=True)
+        
+        if config.get('load_weights_only', False):
+            # Only load model weights
+            self.model.load_state_dict(checkpoint['model_state_dict'])
             
-            latest_checkpoint = max(checkpoint_files, key=lambda f: os.path.getmtime(os.path.join(config['resume'], f)))
-            checkpoint_path = os.path.join(config['resume'], latest_checkpoint)
+            # Also load refiner state if present
+            if 'refiner_state_dict' in checkpoint:
+                self.refiner.load_state_dict(checkpoint['refiner_state_dict'])
+                logging.info(f"Model and refiner weights loaded from {checkpoint_path}")
+            else:
+                logging.info(f"Model weights loaded from {checkpoint_path}")
             
-            # Load checkpoint with weights_only=True
-            checkpoint = torch.load(checkpoint_path, map_location=self.device, weights_only=True)
+        else:
+            # Load full training state for resuming
+            self.model.load_state_dict(checkpoint['model_state_dict'])
+            self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+            self.lr_scheduler.load_state_dict(checkpoint['lr_scheduler_state_dict'])
             
-            # Load model and optimizer states
-            if 'model_state_dict' in checkpoint:
-                self.model.load_state_dict(checkpoint['model_state_dict'])
-            if 'sigma_state_dict' in checkpoint:
-                self.refiner.sigma_param.data = checkpoint['sigma_state_dict'].to(self.device)
-                
-            # Recreate optimizer with current parameters before loading state
-            params = list(self.model.parameters()) + list(self.refiner.parameters())
-            self.optimizer = torch.optim.Adam(params, lr=self.config['lr'])
+            # Load refiner state if it exists
+            if 'refiner_state_dict' in checkpoint:
+                self.refiner.load_state_dict(checkpoint['refiner_state_dict'])
+                self.refiner_optimizer.load_state_dict(checkpoint['refiner_optimizer_state_dict'])
+                self.refiner_lr_scheduler.load_state_dict(checkpoint['refiner_lr_scheduler_state_dict'])
             
-            # Now load optimizer state
-            if 'optimizer_state_dict' in checkpoint:
-                try:
-                    self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-                except ValueError as e:
-                    logging.warning(f"Failed to load optimizer state: {e}. Starting with fresh optimizer.")
+            # Load training history
+            self.start_epoch = checkpoint['epoch'] + 1
+            self.val_maes = checkpoint['val_maes']
+            self.val_rmses = checkpoint['val_rmses']
+            self.val_losses = checkpoint['val_losses']
+            self.train_maes = checkpoint['train_maes']
+            self.train_rmses = checkpoint['train_rmses']
+            self.train_losses = checkpoint['train_losses']
             
-            if 'lr_scheduler_state_dict' in checkpoint:
-                self.lr_scheduler.load_state_dict(checkpoint['lr_scheduler_state_dict'])
+            self.best_val_rmse = checkpoint['best_val_rmse']
+            self.best_val_mae = checkpoint['best_val_mae']
             
-            self.start_epoch = checkpoint.get('epoch', 0) + 1
-            self.val_maes = checkpoint.get('val_maes', [])
-            self.val_rmses = checkpoint.get('val_rmses', [])
-            self.val_losses = checkpoint.get('val_losses', [])
-            self.train_maes = checkpoint.get('train_maes', [])
-            self.train_rmses = checkpoint.get('train_rmses', [])
-            self.train_losses = checkpoint.get('train_losses', [])
-            
-            self.best_val_rmse = checkpoint.get('best_val_rmse', np.inf)
-            self.best_val_mae = checkpoint.get('best_val_mae', np.inf)
-            
-            logging.info(f"Training resumed from checkpoint! Current sigma: {self.refiner.get_sigma():.2f}")
-            
-        elif config['model_dir']:
-            # Only load model weights - for inference or fresh training from pretrained
-            checkpoint_files = [f for f in os.listdir(config['model_dir']) if f.endswith('.tar')]
-            if not checkpoint_files:
-                raise FileNotFoundError(f"No .tar checkpoint files found in {config['model_dir']}")
-            
-            latest_checkpoint = max(checkpoint_files, key=lambda f: os.path.getmtime(os.path.join(config['model_dir'], f)))
-            checkpoint_path = os.path.join(config['model_dir'], latest_checkpoint)
-            
-            # Load checkpoint with weights_only=True
-            checkpoint = torch.load(checkpoint_path, map_location=self.device, weights_only=True)
-            
-            # Only load model and optimizer weights
-            if 'model_state_dict' in checkpoint:
-                self.model.load_state_dict(checkpoint['model_state_dict'])
-            if 'optimizer_state_dict' in checkpoint:
-                self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-            
-            logging.info(f"Model weights loaded from checkpoint! Starting fresh training.")
+            logging.info(f"Full checkpoint loaded for resume from {checkpoint_path}")

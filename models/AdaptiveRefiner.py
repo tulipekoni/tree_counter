@@ -1,46 +1,49 @@
 import torch
 import torch.nn as nn
-from models.StaticRefiner import StaticRefiner
 
-class AdaptiveRefiner(StaticRefiner):
-    def __init__(self, device, config):
-        super().__init__(device, sigma=15.0)  # Initialize parent first
-        self.sigma_param = nn.Parameter(torch.tensor(15.0, device=device))
-        self._cached_sigma = None
-        self._cached_kernel = None
+class AdaptiveRefiner(nn.Module):
+    def __init__(self, device, initial_sigma=15.0):
+        super(AdaptiveRefiner, self).__init__()
+        self.device = device
+        self.sigma = nn.Parameter(torch.tensor(initial_sigma, dtype=torch.float32, device=device))
         
-        self.optimizer = torch.optim.Adam([self.sigma_param], lr=config['sigma_lr'])
+    def calculate_kernel_size(self, sigma):
+        kernel_size = int(6 * sigma) + 3
+        if kernel_size % 2 == 0:
+            kernel_size += 1
+        return kernel_size
 
-    def _update_kernel(self):
-        if self._cached_sigma != self.sigma_param.item():
-            self.kernel_size = self.calculate_kernel_size(self.sigma_param.item())
-            ax = torch.arange(-self.kernel_size // 2 + 1., self.kernel_size // 2 + 1., device=self.device)
-            xx, yy = torch.meshgrid(ax, ax, indexing='ij')
-            kernel = torch.exp(-(xx**2 + yy**2) / (2. * self.sigma_param.item()**2))
-            self.gaussian_kernel = kernel / torch.sum(kernel)
-            self._cached_sigma = self.sigma_param.item()
-            self._cached_kernel = self.gaussian_kernel
+    def get_gaussian_kernel(self):
+        sigma = torch.abs(self.sigma)  # Ensure sigma is positive
+        kernel_size = self.calculate_kernel_size(sigma)
+        
+        ax = torch.arange(-kernel_size // 2 + 1., kernel_size // 2 + 1., device=self.device)
+        xx, yy = torch.meshgrid(ax, ax, indexing='ij')
+        kernel = torch.exp(-(xx**2 + yy**2) / (2. * sigma**2))
+        return kernel / torch.sum(kernel), kernel_size
 
     def forward(self, batch_images, batch_labels):
-        self._update_kernel()
-        return super().forward(batch_images, batch_labels)
-
-    def get_sigma(self):
-        return self.sigma_param.item()
-
-    def step(self):
-        torch.nn.utils.clip_grad_norm_([self.sigma_param], max_norm=1.0)
-        self.optimizer.step()
+        gaussian_kernel, kernel_size = self.get_gaussian_kernel()
         
-        with torch.no_grad():
-            self.sigma_param.clamp_(min=1.0, max=30.0)
+        # Create an empty density map for this image
+        shape = batch_images.shape
+        padded_shape = (shape[0], 1, shape[2] + 2 * kernel_size, shape[3] + 2 * kernel_size)
+        density = torch.zeros(padded_shape, device=self.device)
         
-        self.optimizer.zero_grad()
+        # For each batch...
+        for batch, labels in enumerate(batch_labels):
+            if len(labels) == 0:
+                continue
+            
+            # For each label
+            for label in labels:
+                x = int(label[0] - kernel_size/2) + kernel_size
+                y = int(label[1] - kernel_size/2) + kernel_size
+                xmax = x + kernel_size
+                ymax = y + kernel_size
 
-    def train(self, mode=True):
-        super().train(mode)
-        return self
-
-    def eval(self):
-        super().eval()
-        return self
+                density[batch, :, x:xmax, y:ymax] += gaussian_kernel
+        
+        # Remove padding from each batch density map    
+        density = density[:, :, kernel_size:-kernel_size, kernel_size:-kernel_size]
+        return density
