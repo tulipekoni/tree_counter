@@ -12,7 +12,7 @@ class Tuner(Trainer):
         super().__init__(config)
 
     def setup(self):
-        self.sigma = torch.nn.Parameter(torch.tensor(15.0, dtype=torch.float32), requires_grad=True)
+        self.sigma = torch.nn.Parameter(torch.tensor(3.0, dtype=torch.float32), requires_grad=True)
         print(f"Initial sigma: {self.sigma.item()}")
         self.refiner = StaticRefinerTuner(device=self.device, sigma=self.sigma)
         self.refiner.to(self.device)
