@@ -11,7 +11,7 @@ class AdaptiveRefiner(nn.Module):
         kernel_size = int(6 * sigma) + 3
         if kernel_size % 2 == 0:
             kernel_size += 1
-        return kernel_size
+        return min(kernel_size, 35*6+3)
 
     def get_gaussian_kernel(self):
         sigma = torch.abs(self.sigma)  # Ensure sigma is positive

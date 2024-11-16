@@ -5,12 +5,14 @@ import numpy as np
 import cv2
 from models.UNet import UNet
 from models.StaticRefiner import StaticRefiner
+from models.AdaptiveRefiner import AdaptiveRefiner
 from datasets.tree_counting_dataset import TreeCountingDataset
 from utils.arg_parser import parse_visualizer_args
 from utils.losses import combined_loss
 
 def load_model(checkpoint_path, device):
     model = UNet()
+    refiner = None
     
     # Find the most recent .tar file in the model folder
     checkpoint_files = [f for f in os.listdir(checkpoint_path) if f.endswith('.tar')]
@@ -27,7 +29,18 @@ def load_model(checkpoint_path, device):
     model.load_state_dict(checkpoint['model_state_dict'])
     model.to(device)
     model.eval()
-    return model
+    
+    # If refiner state exists, load AdaptiveRefiner
+    if 'refiner_state_dict' in checkpoint:
+        refiner = AdaptiveRefiner(device=device)
+        refiner.load_state_dict(checkpoint['refiner_state_dict'])
+        refiner.to(device)
+        refiner.eval()
+    else:
+        refiner = StaticRefiner(device=device, sigma=15)
+        refiner.to(device)
+    
+    return model, refiner
 
 def main():
     # Parse command-line arguments
@@ -36,14 +49,11 @@ def main():
     # Setup device (GPU or CPU)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    # Load the model
-    model = load_model(args.model_dir, device)
+    # Load the model and refiner
+    model, refiner = load_model(args.model_dir, device)
 
     # Prepare dataset
     dataset = TreeCountingDataset(root_path=os.path.join(args.data_dir, 'test'), augment=False)
-
-    # Create StaticRefiner instance
-    refiner = StaticRefiner(device=device, sigma=15)
 
     # Start visualization loop
     indices = list(range(len(dataset)))
@@ -69,6 +79,9 @@ def main():
         # Prepare images for display
         # Convert tensors to numpy arrays
         image_np = image.cpu().squeeze().permute(1, 2, 0).numpy()
+        pred_density_map_np = pred_density_map.cpu().squeeze().numpy()
+        gt_density_map_np = gt_density_map.cpu().detach().squeeze().numpy()
+
         # Denormalize image
         mean = np.array([0.485, 0.456, 0.406])  # ImageNet mean
         std = np.array([0.229, 0.224, 0.225])   # ImageNet std
@@ -76,9 +89,6 @@ def main():
         image_np = np.clip(image_np, 0, 1)
         image_np = (image_np * 255).astype(np.uint8)
         image_np = cv2.cvtColor(image_np, cv2.COLOR_RGB2BGR)
-
-        pred_density_map_np = pred_density_map.cpu().squeeze().numpy()
-        gt_density_map_np = gt_density_map.cpu().squeeze().numpy()
 
         # Normalize density maps for display
         pred_density_map_display = pred_density_map_np / (pred_density_map_np.max() + 1e-9)

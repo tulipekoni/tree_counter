@@ -51,6 +51,7 @@ class Adaptive(Trainer):
 
                 loss = self.loss_function(batch_pred_density_maps, batch_gt_density_maps)
                 loss.backward() 
+                torch.nn.utils.clip_grad_norm_(self.refiner.parameters(), max_norm=1.0)
                 
                 # Step both optimizers 
                 self.optimizer.step()
