@@ -8,14 +8,11 @@ from datetime import datetime
 import matplotlib.pyplot as plt
 import torch.utils.data.dataloader
 from abc import ABC, abstractmethod
+from utils.losses import combined_loss
 from torch.utils.data import DataLoader
 from torch.optim import lr_scheduler, Adam
 from utils.helper import ModelSaver, setlogger
-from torch.utils.data.dataloader import default_collate
 from datasets.tree_counting_dataset import TreeCountingDataset
-import torch.nn.functional as F
-from torch.nn import MSELoss
-from utils.losses import combined_loss
 
 
 class Trainer(ABC):
@@ -60,17 +57,7 @@ class Trainer(ABC):
         # Add weights for the metrics
         self.mae_weight = config.get('mae_weight', 0.5)
         self.rmse_weight = config.get('rmse_weight', 0.5)
-
-    def setup(self):
-        """
-        Initializes datasets, model, refiner, loss, and optimizer.      
-        This method sets up the training environment, including:
-        - Setting the device (GPU or CPU)
-        - Loading and preparing datasets
-        - Initializing the model, refiner (if used), and optimizers
-        - Setting up the loss function
-        """
-        config = self.config
+        
         
         # Setup device (GPU or CPU)
         if torch.cuda.is_available():
@@ -83,6 +70,17 @@ class Trainer(ABC):
             self.device_count = 1
             logging.info('Using CPU')
         pass
+
+    def setup(self):
+        """
+        Initializes datasets, model, refiner, loss, and optimizer.      
+        This method sets up the training environment, including:
+        - Setting the device (GPU or CPU)
+        - Loading and preparing datasets
+        - Initializing the model, refiner (if used), and optimizers
+        - Setting up the loss function
+        """
+        config = self.config
     
         self.datasets = {
             'train': TreeCountingDataset(root_path=os.path.join(config['data_dir'], 'train')),

@@ -2,7 +2,6 @@ import os
 import time
 import torch
 import logging
-import numpy as np
 from utils.trainer import Trainer
 from utils.helper import RunningAverageTracker
 from models.StaticRefinerTuner import StaticRefinerTuner
@@ -10,19 +9,18 @@ from models.StaticRefinerTuner import StaticRefinerTuner
 class Tuner(Trainer):
     def __init__(self, config):
         super().__init__(config)
-        self.sigma = torch.nn.Parameter(torch.tensor(15.0, device=self.device), requires_grad=True)
 
     def setup(self):
-        super().setup()
+        self.sigma = torch.nn.Parameter(torch.tensor(15.0, dtype=torch.float32), requires_grad=True)
         self.refiner = StaticRefinerTuner(device=self.device, sigma=self.sigma)
         self.refiner.to(self.device)
+        self.refiner_optimizer = torch.optim.Adam([self.sigma], lr=self.config['refiner_lr'])
+        super().setup()
         
         # Freeze model weights
         for param in self.model.parameters():
             param.requires_grad = False
 
-        # Optimizer for sigma
-        self.sigma_optimizer = torch.optim.Adam([self.sigma], lr=self.config['sigma_lr'])
 
     def train_epoch(self, epoch):
         epoch_loss = RunningAverageTracker()
@@ -37,14 +35,14 @@ class Tuner(Trainer):
             batch_labels = [p.to(self.device) for p in batch_labels]
 
             with torch.set_grad_enabled(True):
-                self.sigma_optimizer.zero_grad()
+                self.refiner_optimizer.zero_grad()
                 batch_pred_density_maps = self.model(batch_images)
                 batch_gt_density_maps = self.refiner(batch_images, batch_labels)
 
                 # Loss for step
                 loss = self.loss_function(batch_pred_density_maps, batch_gt_density_maps)
                 loss.backward()
-                self.sigma_optimizer.step()
+                self.refiner_optimizer.step()
 
                 # The number of trees is total sum of all prediction pixels
                 batch_pred_counts = batch_pred_density_maps.sum(dim=(1, 2, 3)).detach()
@@ -112,7 +110,7 @@ class Tuner(Trainer):
             'best_val_mae': self.best_val_mae,
             'best_val_rmse': self.best_val_rmse,
             'model_state_dict': self.model.state_dict(),
-            'sigma_optimizer_state_dict': self.sigma_optimizer.state_dict(),
+            'refiner_optimizer_state_dict': self.refiner_optimizer.state_dict(),
         }
         save_path = os.path.join(self.save_dir, f'checkpoint_epoch_{epoch}.tar')
         self.list_of_best_models.append(save_path)
@@ -131,19 +129,28 @@ class Tuner(Trainer):
         checkpoint_path = os.path.join(config['resume'], latest_checkpoint)
         checkpoint = torch.load(checkpoint_path, map_location=self.device, weights_only=False)
 
-        self.sigma = torch.nn.Parameter(torch.tensor(checkpoint['sigma'], device=self.device), requires_grad=True)
-        self.start_epoch = checkpoint['epoch'] + 1
-        self.val_maes = checkpoint['val_maes']
-        self.val_rmses = checkpoint['val_rmses']
-        self.val_losses = checkpoint['val_losses']
-        self.train_maes = checkpoint['train_maes']
-        self.train_rmses = checkpoint['train_rmses']
-        self.train_losses = checkpoint['train_losses']
+        if config.get('load_weights_only', False):
+            # Only load model weights
+            self.model.load_state_dict(checkpoint['model_state_dict'])
+            if 'refiner_state_dict' in checkpoint:
+                self.refiner.load_state_dict(checkpoint['refiner_state_dict'])
+            logging.info(f"Model weights loaded!")
+        else:
+            # Load full checkpoint
+            self.sigma = torch.nn.Parameter(torch.tensor(checkpoint['sigma'], dtype=torch.float32, device=self.device), requires_grad=True)
+            self.start_epoch = checkpoint['epoch'] + 1
+            self.val_maes = checkpoint['val_maes']
+            self.val_rmses = checkpoint['val_rmses']
+            self.val_losses = checkpoint['val_losses']
+            self.train_maes = checkpoint['train_maes']
+            self.train_rmses = checkpoint['train_rmses']
+            self.train_losses = checkpoint['train_losses']
 
-        self.best_val_rmse = checkpoint['best_val_rmse']
-        self.best_val_mae = checkpoint['best_val_mae']
+            self.best_val_rmse = checkpoint['best_val_rmse']
+            self.best_val_mae = checkpoint['best_val_mae']
 
-        self.model.load_state_dict(checkpoint['model_state_dict'])
-        self.sigma_optimizer.load_state_dict(checkpoint['sigma_optimizer_state_dict'])
+            self.model.load_state_dict(checkpoint['model_state_dict'])
+            self.refiner.load_state_dict(checkpoint['refiner_state_dict'])
+            self.refiner_optimizer.load_state_dict(checkpoint['refiner_optimizer_state_dict'])
 
-        logging.info(f"Checkpoint loaded!")
+            logging.info(f"Full checkpoint loaded!")
