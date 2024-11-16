@@ -1,7 +1,7 @@
 import os
 import torch
 from utils.static import Static
-from utils.adaptive import Adaptive
+from utils.tuner import Tuner
 from utils.arg_parser import parse_train_args, parse_args_to_config
 from utils.config_loader import load_config, override_config
 
@@ -16,7 +16,7 @@ def main():
 
     torch.backends.cudnn.benchmark = True
     os.environ['CUDA_VISIBLE_DEVICES'] = config['device'].strip()  # set vis gpu
-    trainer = Adaptive(config)
+    trainer = Tuner(config)
     trainer.setup()
     trainer.train()
 
