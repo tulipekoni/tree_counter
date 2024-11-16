@@ -5,6 +5,7 @@ import logging
 from utils.trainer import Trainer
 from utils.helper import RunningAverageTracker
 from models.StaticRefinerTuner import StaticRefinerTuner
+from torch.optim import lr_scheduler, Adam
 
 class Tuner(Trainer):
     def __init__(self, config):
@@ -12,14 +13,17 @@ class Tuner(Trainer):
 
     def setup(self):
         self.sigma = torch.nn.Parameter(torch.tensor(15.0, dtype=torch.float32), requires_grad=True)
+        print(f"Initial sigma: {self.sigma.item()}")
         self.refiner = StaticRefinerTuner(device=self.device, sigma=self.sigma)
         self.refiner.to(self.device)
-        self.refiner_optimizer = torch.optim.Adam([self.sigma], lr=self.config['refiner_lr'])
+        self.refiner_optimizer = Adam([self.sigma], lr=self.config['refiner_lr'])
         super().setup()
         
         # Freeze model weights
         for param in self.model.parameters():
             param.requires_grad = False
+            
+        self.lr_scheduler =  lr_scheduler.StepLR(self.refiner_optimizer, step_size=self.config['lr_step_size'], gamma=self.config['lr_gamma'])
 
 
     def train_epoch(self, epoch):
@@ -58,6 +62,7 @@ class Tuner(Trainer):
         average_mae = epoch_mae.get_average()
         average_rmse = torch.sqrt(torch.tensor(epoch_rmse.get_average())).item()
         logging.info(f'Training: Loss: {average_loss:.2f}, RMSE: {average_rmse:.2f}, MAE: {average_mae:.2f}, Cost {time.time() - start_time:.1f} sec')
+        print(f"Sigma during training: {self.sigma.item()}")
 
         return average_loss, average_rmse, average_mae
 
@@ -94,6 +99,7 @@ class Tuner(Trainer):
         average_mae = epoch_mae.get_average()
         average_rmse = torch.sqrt(torch.tensor(epoch_rmse.get_average())).item()
         logging.info(f'Validation: Loss: {average_loss:.2f}, RMSE: {average_rmse:.2f}, MAE: {average_mae:.2f}, Cost {time.time() - start_time:.1f} sec')
+        print(f"Sigma during validation: {self.sigma.item()}")
 
         return average_loss, average_rmse, average_mae
 
