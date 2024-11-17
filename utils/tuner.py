@@ -15,7 +15,7 @@ class Tuner(Trainer):
     def setup(self):
         config = self.config
         # Initialize StaticRefinerTuner with initial sigma value
-        initial_sigma_value = 3.0  # or retrieve from config if needed
+        initial_sigma_value = 15  # or retrieve from config if needed
         self.refiner = StaticRefinerTuner(device=self.device, initial_sigma_value=initial_sigma_value)
         self.refiner.to(self.device)
         
@@ -54,6 +54,11 @@ class Tuner(Trainer):
 
                 # Loss for step
                 loss = self.loss_function(batch_pred_density_maps, batch_gt_density_maps)
+                
+                # Add regularization term for sigma
+                sigma_regularization = 0.01 * torch.sum(self.refiner.sigma ** 2)
+                loss += sigma_regularization
+                
                 loss.backward()
                 self.optimizer.step()
 
