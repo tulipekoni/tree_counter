@@ -23,9 +23,12 @@ class StaticRefinerTuner(nn.Module):
         return kernel / torch.sum(kernel)
 
     def forward(self, batch_images, batch_labels):
+        # Clamp sigma to a reasonable range
+        clamped_sigma = torch.clamp(self.sigma, min=0.1, max=30.0)
+        
         # Recalculate kernel size and kernel if sigma has changed
         if self.sigma.requires_grad:
-            self.kernel_size = self.calculate_kernel_size(self.sigma.item())
+            self.kernel_size = self.calculate_kernel_size(clamped_sigma.item())
             self.gaussian_kernel = self.calculate_gaussian_kernel()
 
         # Create an empty density map for this image
