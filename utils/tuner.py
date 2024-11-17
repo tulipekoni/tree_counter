@@ -10,20 +10,20 @@ from torch.optim import lr_scheduler, Adam
 class Tuner(Trainer):
     def __init__(self, config):
         super().__init__(config)
+        self.train_sigmas = []
 
     def setup(self):
         self.sigma = torch.nn.Parameter(torch.tensor(3.0, dtype=torch.float32), requires_grad=True)
-        print(f"Initial sigma: {self.sigma.item()}")
         self.refiner = StaticRefinerTuner(device=self.device, sigma=self.sigma)
         self.refiner.to(self.device)
         self.refiner_optimizer = Adam([self.sigma], lr=self.config['refiner_lr'])
+        self.refiner_lr_scheduler =  lr_scheduler.StepLR(self.refiner_optimizer, step_size=self.config['lr_step_size'], gamma=self.config['lr_gamma'])
         super().setup()
         
         # Freeze model weights
         for param in self.model.parameters():
             param.requires_grad = False
             
-        self.lr_scheduler =  lr_scheduler.StepLR(self.refiner_optimizer, step_size=self.config['lr_step_size'], gamma=self.config['lr_gamma'])
 
 
     def train_epoch(self, epoch):
@@ -31,7 +31,6 @@ class Tuner(Trainer):
         epoch_mae = RunningAverageTracker()
         epoch_rmse = RunningAverageTracker()
         start_time = time.time()
-        self.model.eval()  # Model weights are frozen
 
         for step, (batch_images, batch_labels, batch_names) in enumerate(self.dataloaders['train']):
             batch_gt_count = torch.tensor([len(p) for p in batch_labels], dtype=torch.float32, device=self.device)
@@ -39,6 +38,7 @@ class Tuner(Trainer):
             batch_labels = [p.to(self.device) for p in batch_labels]
 
             with torch.set_grad_enabled(True):
+                self.optimizer.zero_grad()
                 self.refiner_optimizer.zero_grad()
                 batch_pred_density_maps = self.model(batch_images)
                 batch_gt_density_maps = self.refiner(batch_images, batch_labels)
@@ -46,6 +46,7 @@ class Tuner(Trainer):
                 # Loss for step
                 loss = self.loss_function(batch_pred_density_maps, batch_gt_density_maps)
                 loss.backward()
+                self.optimizer.step()
                 self.refiner_optimizer.step()
 
                 # The number of trees is total sum of all prediction pixels
@@ -61,9 +62,10 @@ class Tuner(Trainer):
         average_loss = epoch_loss.get_average()
         average_mae = epoch_mae.get_average()
         average_rmse = torch.sqrt(torch.tensor(epoch_rmse.get_average())).item()
-        logging.info(f'Training: Loss: {average_loss:.2f}, RMSE: {average_rmse:.2f}, MAE: {average_mae:.2f}, Cost {time.time() - start_time:.1f} sec')
-        print(f"Sigma during training: {self.sigma.item()}")
+        logging.info(f'Training: Loss: {average_loss:.2f}, RMSE: {average_rmse:.2f}, MAE: {average_mae:.2f}, Sigma: {self.sigma.item():.2f}, Cost {time.time() - start_time:.1f} sec')
 
+        self.train_sigmas.append(self.sigma.item())
+        self.refiner_lr_scheduler.step()
         return average_loss, average_rmse, average_mae
 
     def validate_epoch(self, epoch):
@@ -72,6 +74,7 @@ class Tuner(Trainer):
         epoch_rmse = RunningAverageTracker()
         start_time = time.time()
         self.model.eval()
+        self.refiner.eval()
 
         for batch_images, batch_labels, batch_names in self.dataloaders['val']:
             batch_gt_count = torch.tensor([len(p) for p in batch_labels], dtype=torch.float32, device=self.device)
@@ -99,7 +102,6 @@ class Tuner(Trainer):
         average_mae = epoch_mae.get_average()
         average_rmse = torch.sqrt(torch.tensor(epoch_rmse.get_average())).item()
         logging.info(f'Validation: Loss: {average_loss:.2f}, RMSE: {average_rmse:.2f}, MAE: {average_mae:.2f}, Cost {time.time() - start_time:.1f} sec')
-        print(f"Sigma during validation: {self.sigma.item()}")
 
         return average_loss, average_rmse, average_mae
 
@@ -113,9 +115,11 @@ class Tuner(Trainer):
             'train_maes': self.train_maes,
             'train_rmses': self.train_rmses,
             'train_losses': self.train_losses,
+            'train_sigmas': self.train_sigmas,
             'best_val_mae': self.best_val_mae,
             'best_val_rmse': self.best_val_rmse,
             'model_state_dict': self.model.state_dict(),
+            'optimizer_state_dict': self.optimizer.state_dict(),
             'refiner_optimizer_state_dict': self.refiner_optimizer.state_dict(),
         }
         save_path = os.path.join(self.save_dir, f'checkpoint_epoch_{epoch}.tar')
@@ -157,6 +161,7 @@ class Tuner(Trainer):
 
             self.model.load_state_dict(checkpoint['model_state_dict'])
             self.refiner.load_state_dict(checkpoint['refiner_state_dict'])
+            self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
             self.refiner_optimizer.load_state_dict(checkpoint['refiner_optimizer_state_dict'])
 
             logging.info(f"Full checkpoint loaded!")
