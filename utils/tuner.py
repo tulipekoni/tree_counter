@@ -4,33 +4,43 @@ import torch
 import logging
 from utils.trainer import Trainer
 from utils.helper import RunningAverageTracker
+from torch.optim import Adam, lr_scheduler
 from models.StaticRefinerTuner import StaticRefinerTuner
-from torch.optim import lr_scheduler, Adam
 
 class Tuner(Trainer):
     def __init__(self, config):
-        super().__init__(config)
         self.train_sigmas = []
+        super().__init__(config)
 
     def setup(self):
-        self.sigma = torch.nn.Parameter(torch.tensor(3.0, dtype=torch.float32), requires_grad=True)
-        self.refiner = StaticRefinerTuner(device=self.device, sigma=self.sigma)
+        config = self.config
+        # Initialize StaticRefinerTuner with initial sigma value
+        initial_sigma_value = 3.0  # or retrieve from config if needed
+        self.refiner = StaticRefinerTuner(device=self.device, initial_sigma_value=initial_sigma_value)
         self.refiner.to(self.device)
-        self.refiner_optimizer = Adam([self.sigma], lr=self.config['refiner_lr'])
-        self.refiner_lr_scheduler =  lr_scheduler.StepLR(self.refiner_optimizer, step_size=self.config['lr_step_size'], gamma=self.config['lr_gamma'])
-        super().setup()
         
-        # Freeze model weights
-        for param in self.model.parameters():
-            param.requires_grad = False
-            
+        # Call the setup method of the parent class
+        super().setup()
 
+        # Define parameter groups with different learning rates
+        model_params = list(self.model.parameters())
+        refiner_params = list(self.refiner.parameters())
+
+        self.optimizer = Adam([
+            {'params': model_params, 'lr': config['lr']},
+            {'params': refiner_params, 'lr': config['refiner_lr']}
+        ], weight_decay=config['weight_decay'])
+
+        # Scheduler setup
+        self.lr_scheduler = lr_scheduler.StepLR(self.optimizer, step_size=config['lr_step_size'], gamma=config['lr_gamma'])
 
     def train_epoch(self, epoch):
         epoch_loss = RunningAverageTracker()
         epoch_mae = RunningAverageTracker()
         epoch_rmse = RunningAverageTracker()
         start_time = time.time()
+        self.model.train()
+        self.refiner.train()
 
         for step, (batch_images, batch_labels, batch_names) in enumerate(self.dataloaders['train']):
             batch_gt_count = torch.tensor([len(p) for p in batch_labels], dtype=torch.float32, device=self.device)
@@ -39,7 +49,6 @@ class Tuner(Trainer):
 
             with torch.set_grad_enabled(True):
                 self.optimizer.zero_grad()
-                self.refiner_optimizer.zero_grad()
                 batch_pred_density_maps = self.model(batch_images)
                 batch_gt_density_maps = self.refiner(batch_images, batch_labels)
 
@@ -47,7 +56,6 @@ class Tuner(Trainer):
                 loss = self.loss_function(batch_pred_density_maps, batch_gt_density_maps)
                 loss.backward()
                 self.optimizer.step()
-                self.refiner_optimizer.step()
 
                 # The number of trees is total sum of all prediction pixels
                 batch_pred_counts = batch_pred_density_maps.sum(dim=(1, 2, 3)).detach()
@@ -62,10 +70,9 @@ class Tuner(Trainer):
         average_loss = epoch_loss.get_average()
         average_mae = epoch_mae.get_average()
         average_rmse = torch.sqrt(torch.tensor(epoch_rmse.get_average())).item()
-        logging.info(f'Training: Loss: {average_loss:.2f}, RMSE: {average_rmse:.2f}, MAE: {average_mae:.2f}, Sigma: {self.sigma.item():.2f}, Cost {time.time() - start_time:.1f} sec')
+        logging.info(f'Training: Loss: {average_loss:.2f}, RMSE: {average_rmse:.2f}, MAE: {average_mae:.2f}, Sigma: {self.refiner.sigma.item():.2f}, Cost {time.time() - start_time:.1f} sec')
 
-        self.train_sigmas.append(self.sigma.item())
-        self.refiner_lr_scheduler.step()
+        self.train_sigmas.append(self.refiner.sigma.item())
         return average_loss, average_rmse, average_mae
 
     def validate_epoch(self, epoch):
@@ -108,7 +115,6 @@ class Tuner(Trainer):
     def save_checkpoint(self, epoch):
         checkpoint = {
             'epoch': epoch,
-            'sigma': self.sigma.item(),
             'val_maes': self.val_maes,
             'val_rmses': self.val_rmses,
             'val_losses': self.val_losses,
@@ -119,8 +125,8 @@ class Tuner(Trainer):
             'best_val_mae': self.best_val_mae,
             'best_val_rmse': self.best_val_rmse,
             'model_state_dict': self.model.state_dict(),
+            'refiner_state_dict': self.refiner.state_dict(),
             'optimizer_state_dict': self.optimizer.state_dict(),
-            'refiner_optimizer_state_dict': self.refiner_optimizer.state_dict(),
         }
         save_path = os.path.join(self.save_dir, f'checkpoint_epoch_{epoch}.tar')
         self.list_of_best_models.append(save_path)
@@ -147,7 +153,6 @@ class Tuner(Trainer):
             logging.info(f"Model weights loaded!")
         else:
             # Load full checkpoint
-            self.sigma = torch.nn.Parameter(torch.tensor(checkpoint['sigma'], dtype=torch.float32, device=self.device), requires_grad=True)
             self.start_epoch = checkpoint['epoch'] + 1
             self.val_maes = checkpoint['val_maes']
             self.val_rmses = checkpoint['val_rmses']
@@ -155,6 +160,7 @@ class Tuner(Trainer):
             self.train_maes = checkpoint['train_maes']
             self.train_rmses = checkpoint['train_rmses']
             self.train_losses = checkpoint['train_losses']
+            self.train_sigmas = checkpoint['train_sigmas']
 
             self.best_val_rmse = checkpoint['best_val_rmse']
             self.best_val_mae = checkpoint['best_val_mae']
@@ -162,6 +168,5 @@ class Tuner(Trainer):
             self.model.load_state_dict(checkpoint['model_state_dict'])
             self.refiner.load_state_dict(checkpoint['refiner_state_dict'])
             self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-            self.refiner_optimizer.load_state_dict(checkpoint['refiner_optimizer_state_dict'])
 
             logging.info(f"Full checkpoint loaded!")

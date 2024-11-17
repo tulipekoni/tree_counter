@@ -2,10 +2,11 @@ import torch
 import torch.nn as nn
 
 class StaticRefinerTuner(nn.Module):
-    def __init__(self, device, sigma):
+    def __init__(self, device, initial_sigma_value):
         super(StaticRefinerTuner, self).__init__()
-        self.sigma = sigma
         self.device = device
+        # Make sigma a learnable parameter
+        self.sigma = nn.Parameter(torch.tensor(initial_sigma_value, dtype=torch.float32, device=device), requires_grad=True)
         self.kernel_size = self.calculate_kernel_size(self.sigma.item())
         self.gaussian_kernel = self.calculate_gaussian_kernel()
 
