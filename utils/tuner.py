@@ -14,6 +14,8 @@ class Tuner(Trainer):
     def setup(self):
         self.refiner = StaticRefiner(device=self.device, sigma=self.current_sigma)
         self.refiner.to(self.device)
+        
+        self.lr_scheduler = None
         super().setup()
         
     def train_epoch(self, epoch):
