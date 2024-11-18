@@ -56,7 +56,7 @@ class Tuner(Trainer):
                 loss = self.loss_function(batch_pred_density_maps, batch_gt_density_maps)
                 
                 # Add regularization term for sigma
-                sigma_regularization = 0.01 * torch.sum(self.refiner.sigma ** 2)
+                sigma_regularization = 0.0001 * torch.sum(self.refiner.sigma ** 2)
                 loss += sigma_regularization
                 
                 loss.backward()
