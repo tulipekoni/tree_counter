@@ -1,7 +1,7 @@
 {
     "save_dir": "./checkpoints",
     "data_dir": "./processed_data",
-    "resume": "./phases/phase_1",
+    "resume": "./checkpoints/1117-172146",
     "load_weights_only": true,
     "device": "0",
     "num_workers": 8,
