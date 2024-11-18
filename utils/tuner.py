@@ -1,47 +1,35 @@
 import os
-import time
 import torch
+import time
 import logging
 from utils.trainer import Trainer
+from models.StaticRefiner import StaticRefiner
 from utils.helper import RunningAverageTracker
-from torch.optim import Adam, lr_scheduler
-from models.StaticRefinerTuner import StaticRefinerTuner
 
 class Tuner(Trainer):
     def __init__(self, config):
-        self.train_sigmas = []
+        self.current_sigma = 4  # Starting sigma value
         super().__init__(config)
-
-    def setup(self):
-        config = self.config
-        # Initialize StaticRefinerTuner with initial sigma value
-        initial_sigma_value = 15  # or retrieve from config if needed
-        self.refiner = StaticRefinerTuner(device=self.device, initial_sigma_value=initial_sigma_value)
-        self.refiner.to(self.device)
         
-        # Call the setup method of the parent class
+    def setup(self):
+        self.refiner = StaticRefiner(device=self.device, sigma=self.current_sigma)
+        self.refiner.to(self.device)
         super().setup()
-
-        # Define parameter groups with different learning rates
-        model_params = list(self.model.parameters())
-        refiner_params = list(self.refiner.parameters())
-
-        self.optimizer = Adam([
-            {'params': model_params, 'lr': config['lr']},
-            {'params': refiner_params, 'lr': config['refiner_lr']}
-        ], weight_decay=config['weight_decay'])
-
-        # Scheduler setup
-        self.lr_scheduler = lr_scheduler.StepLR(self.optimizer, step_size=config['lr_step_size'], gamma=config['lr_gamma'])
-
+        
     def train_epoch(self, epoch):
         epoch_loss = RunningAverageTracker()
         epoch_mae = RunningAverageTracker()
         epoch_rmse = RunningAverageTracker()
         start_time = time.time()
-        self.model.train()
-        self.refiner.train()
+        self.model.train() 
 
+        # Update sigma every 20 epochs
+        if epoch > 0 and epoch % 20 == 0:
+            self.current_sigma += 1
+            self.refiner.sigma = self.current_sigma
+            logging.info(f"Updated sigma to {self.current_sigma}")
+
+        # Iterate over data
         for step, (batch_images, batch_labels, batch_names) in enumerate(self.dataloaders['train']):
             batch_gt_count = torch.tensor([len(p) for p in batch_labels], dtype=torch.float32, device=self.device)
             batch_images = batch_images.to(self.device)
@@ -49,22 +37,17 @@ class Tuner(Trainer):
 
             with torch.set_grad_enabled(True):
                 self.optimizer.zero_grad()
-                batch_pred_density_maps = self.model(batch_images)
+                batch_pred_density_maps = self.model(batch_images) 
                 batch_gt_density_maps = self.refiner(batch_images, batch_labels)
 
                 # Loss for step
                 loss = self.loss_function(batch_pred_density_maps, batch_gt_density_maps)
-                
-                # Add regularization term for sigma
-                sigma_regularization = 0.0001 * torch.sum(self.refiner.sigma ** 2)
-                loss += sigma_regularization
-                
-                loss.backward()
+                loss.backward() 
                 self.optimizer.step()
 
                 # The number of trees is total sum of all prediction pixels
-                batch_pred_counts = batch_pred_density_maps.sum(dim=(1, 2, 3)).detach()
-                batch_differences = batch_pred_counts - batch_gt_count
+                batch_pred_counts = batch_pred_density_maps.sum(dim=(1, 2, 3)).detach()  
+                batch_differences = batch_pred_counts - batch_gt_count 
 
                 # Update loss, MAE, and RMSE metrics
                 batch_size = batch_pred_counts.shape[0]
@@ -75,18 +58,16 @@ class Tuner(Trainer):
         average_loss = epoch_loss.get_average()
         average_mae = epoch_mae.get_average()
         average_rmse = torch.sqrt(torch.tensor(epoch_rmse.get_average())).item()
-        logging.info(f'Training: Loss: {average_loss:.2f}, RMSE: {average_rmse:.2f}, MAE: {average_mae:.2f}, Sigma: {self.refiner.sigma.item():.2f}, Cost {time.time() - start_time:.1f} sec')
+        logging.info(f'Training: Loss: {average_loss:.2f}, RMSE: {average_rmse:.2f}, MAE: {average_mae:.2f} Sigma: {self.current_sigma}, Cost {time.time() - start_time:.1f} sec') 
 
-        self.train_sigmas.append(self.refiner.sigma.item())
         return average_loss, average_rmse, average_mae
-
+    
     def validate_epoch(self, epoch):
         epoch_loss = RunningAverageTracker()
         epoch_mae = RunningAverageTracker()
         epoch_rmse = RunningAverageTracker()
         start_time = time.time()
         self.model.eval()
-        self.refiner.eval()
 
         for batch_images, batch_labels, batch_names in self.dataloaders['val']:
             batch_gt_count = torch.tensor([len(p) for p in batch_labels], dtype=torch.float32, device=self.device)
@@ -116,28 +97,28 @@ class Tuner(Trainer):
         logging.info(f'Validation: Loss: {average_loss:.2f}, RMSE: {average_rmse:.2f}, MAE: {average_mae:.2f}, Cost {time.time() - start_time:.1f} sec')
 
         return average_loss, average_rmse, average_mae
-
+    
     def save_checkpoint(self, epoch):
         checkpoint = {
             'epoch': epoch,
-            'val_maes': self.val_maes,
-            'val_rmses': self.val_rmses,
-            'val_losses': self.val_losses,
+            'model_state_dict': self.model.state_dict(),
+            'optimizer_state_dict': self.optimizer.state_dict(),
+            'scheduler_state_dict': self.lr_scheduler.state_dict(),
+            'sigma': self.current_sigma,
+            'train_losses': self.train_losses,
             'train_maes': self.train_maes,
             'train_rmses': self.train_rmses,
-            'train_losses': self.train_losses,
-            'train_sigmas': self.train_sigmas,
-            'best_val_mae': self.best_val_mae,
-            'best_val_rmse': self.best_val_rmse,
-            'model_state_dict': self.model.state_dict(),
-            'refiner_state_dict': self.refiner.state_dict(),
-            'optimizer_state_dict': self.optimizer.state_dict(),
+            'val_losses': self.val_losses,
+            'val_maes': self.val_maes,
+            'val_rmses': self.val_rmses,
         }
+        
         save_path = os.path.join(self.save_dir, f'checkpoint_epoch_{epoch}.tar')
         self.list_of_best_models.append(save_path)
         torch.save(checkpoint, save_path)
         logging.info(f"Checkpoint saved!")
-
+        pass
+    
     def load_checkpoint(self):
         config = self.config
 
@@ -153,12 +134,11 @@ class Tuner(Trainer):
         if config.get('load_weights_only', False):
             # Only load model weights
             self.model.load_state_dict(checkpoint['model_state_dict'])
-            if 'refiner_state_dict' in checkpoint:
-                self.refiner.load_state_dict(checkpoint['refiner_state_dict'])
             logging.info(f"Model weights loaded!")
         else:
             # Load full checkpoint
             self.start_epoch = checkpoint['epoch'] + 1
+            self.current_sigma = checkpoint['sigma']
             self.val_maes = checkpoint['val_maes']
             self.val_rmses = checkpoint['val_rmses']
             self.val_losses = checkpoint['val_losses']
@@ -171,7 +151,6 @@ class Tuner(Trainer):
             self.best_val_mae = checkpoint['best_val_mae']
 
             self.model.load_state_dict(checkpoint['model_state_dict'])
-            self.refiner.load_state_dict(checkpoint['refiner_state_dict'])
             self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
 
             logging.info(f"Full checkpoint loaded!")
