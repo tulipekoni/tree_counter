@@ -10,7 +10,7 @@
     "weight_decay": 1e-4,
     "max_saved_model_count": 1,
     
-    "lr": 5e-5,
+    "lr": 5e-7,
     "dmg_lr": 5e-4,
     "lr_gamma": 0.5,
     "lr_step_size": 50,
