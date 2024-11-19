@@ -22,6 +22,7 @@ def cos_loss(output, target):
 def combined_loss(output, target, coss_loss_multiplier=1.0):
     """
     Calculate loss for density maps where sum represents object count.
+    Returns both total loss and individual components for logging.
     """
     batch_size = output.shape[0]
     
@@ -30,14 +31,18 @@ def combined_loss(output, target, coss_loss_multiplier=1.0):
     pixel_loss = mse_criterion(output, target) / batch_size
     
     # Count prediction error
-    pred_counts = output.sum(dim=(1,2,3))  # Sum each density map
+    pred_counts = output.sum(dim=(1,2,3))
     true_counts = target.sum(dim=(1,2,3))
     count_loss = torch.abs(pred_counts - true_counts).mean()
     
-    # Optional: keep cosine similarity for structural similarity
-    cos_loss_val = coss_loss_multiplier * cos_loss(output, target)
+    # Cosine similarity for structural similarity
+    cos_loss_val = cos_loss(output, target)
     
-    # Combine with appropriate scaling
-    total_loss = pixel_loss + count_loss + 1 * cos_loss_val
+    # Calculate total loss
+    total_loss = pixel_loss + count_loss + coss_loss_multiplier * cos_loss_val
     
-    return total_loss
+    return total_loss, {
+        'pixel_loss': pixel_loss.item(),
+        'count_loss': count_loss.item(),
+        'cos_loss': (coss_loss_multiplier * cos_loss_val).item()
+    }

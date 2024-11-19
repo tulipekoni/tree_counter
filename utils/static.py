@@ -31,14 +31,14 @@ class Static(Trainer):
             batch_labels = [p.to(self.device) for p in batch_labels]
 
             with torch.set_grad_enabled(True):
-                self.optimizer.zero_grad()
+                self.model_optimizer.zero_grad()
                 batch_pred_density_maps = self.model(batch_images) 
                 batch_gt_density_maps = self.dmg(batch_images, batch_labels)
 
                 # Loss for step
                 loss = self.loss_function(batch_pred_density_maps, batch_gt_density_maps, self.dmg.sigma.item())
                 loss.backward() 
-                self.optimizer.step()
+                self.model_optimizer.step()
 
                 # The number of trees is total sum of all prediction pixels
                 batch_pred_counts = batch_pred_density_maps.sum(dim=(1, 2, 3)).detach()  
@@ -108,8 +108,8 @@ class Static(Trainer):
             'best_val_rmse': self.best_val_rmse,
             
             'model_state_dict': self.model.state_dict(),
-            'optimizer_state_dict': self.optimizer.state_dict(),
-            'lr_scheduler_state_dict': self.lr_scheduler.state_dict(),
+            'model_optimizer_state_dict': self.model_optimizer.state_dict(),
+            'model_lr_scheduler_state_dict': self.model_lr_scheduler.state_dict(),
         }
         save_path = os.path.join(self.save_dir, f'checkpoint_epoch_{epoch}.tar')
         self.list_of_best_models.append(save_path)
@@ -143,7 +143,7 @@ class Static(Trainer):
         
         
         self.model.load_state_dict(checkpoint['model_state_dict'])
-        self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-        self.lr_scheduler.load_state_dict(checkpoint['lr_scheduler_state_dict'])
+        self.model_optimizer.load_state_dict(checkpoint['model_optimizer_state_dict'])
+        self.model_lr_scheduler.load_state_dict(checkpoint['model_lr_scheduler_state_dict'])
 
         logging.info(f"Checkpoint loaded!")

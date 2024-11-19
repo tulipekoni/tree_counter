@@ -114,10 +114,10 @@ class Trainer(ABC):
                 
         # Optimizer setup
         params = list(self.model.parameters())
-        self.optimizer = Adam(params, lr=config['lr'], weight_decay=config['weight_decay'])
+        self.model_optimizer = Adam(params, lr=config['lr'], weight_decay=config['weight_decay'])
         
         # Scheduler setup
-        self.lr_scheduler = lr_scheduler.StepLR(self.optimizer, step_size=config['lr_step_size'], gamma=config['lr_gamma'])
+        self.model_lr_scheduler = lr_scheduler.StepLR(self.model_optimizer, step_size=config['lr_step_size'], gamma=config['lr_gamma'])
 
         self.list_of_best_models = ModelSaver(max_count=config['max_saved_model_count'])
         
@@ -157,9 +157,7 @@ class Trainer(ABC):
 
             self._update_graph(epoch)
             
-            self.lr_scheduler.step()
-            current_lr = self.lr_scheduler.get_last_lr()[0]
-            logging.info(f'Current learning rate: {current_lr}')
+            self.model_lr_scheduler.step()
             
             # Calculate moving averages
             moving_avg_mae = self._get_moving_average(self.val_mae_queue, val_mae)
