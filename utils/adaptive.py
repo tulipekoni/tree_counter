@@ -7,6 +7,7 @@ from utils.trainer import Trainer
 import torch.utils.data.dataloader
 from torch.optim import lr_scheduler, Adam
 from utils.helper import RunningAverageTracker
+from utils.losses import modified_elu
 
 class Adaptive(Trainer):
     def __init__(self, config):
@@ -49,7 +50,7 @@ class Adaptive(Trainer):
                 batch_gt_density_maps = self.dmg(batch_images, batch_labels)
 
                 # Loss for step
-                loss, components = self.loss_function(batch_pred_density_maps, batch_gt_density_maps, self.dmg.sigma.item())
+                loss, components = self.loss_function(batch_pred_density_maps, batch_gt_density_maps, modified_elu(self.dmg.sigma))
                 loss.backward() 
                 
                 # Update component sums
@@ -86,9 +87,9 @@ class Adaptive(Trainer):
         average_rmse = torch.sqrt(torch.tensor(epoch_rmse.get_average())).item()
         logging.info(f'Training: Loss: {average_loss:.2f}, RMSE: {average_rmse:.2f}, MAE: {average_mae:.2f}, Sigma: {self.dmg.sigma.item():.2f}, Cost {time.time() - start_time:.1f} sec\n'
                     f'Loss Components (%):\n'
-                    f'  Pixel Loss: {loss_percentages["pixel_loss"]:.1f}%\n'
-                    f'  Count Loss: {loss_percentages["count_loss"]:.1f}%\n'
-                    f'  Cos Loss: {loss_percentages["cos_loss"]:.1f}%')
+                    f'  Pixel Loss: {avg_components["pixel_loss"]:.4f} ({loss_percentages["pixel_loss"]:.1f}%)\n'
+                    f'  Count Loss: {avg_components["count_loss"]:.4f} ({loss_percentages["count_loss"]:.1f}%)\n'
+                    f'  Cos Loss: {avg_components["cos_loss"]:.4f} ({loss_percentages["cos_loss"]:.1f}%)')
 
         return average_loss, average_rmse, average_mae
     
@@ -110,7 +111,7 @@ class Adaptive(Trainer):
                 batch_gt_density_maps = self.dmg(batch_images, batch_labels)
 
                 # Compute loss
-                loss, _ = self.loss_function(batch_pred_density_maps, batch_gt_density_maps, self.dmg.sigma.item())
+                loss, _ = self.loss_function(batch_pred_density_maps, batch_gt_density_maps, modified_elu(self.dmg.sigma))
 
                 # The number of trees is total sum of all prediction pixels
                 batch_pred_counts = batch_pred_density_maps.sum(dim=(1, 2, 3)).detach()
@@ -170,7 +171,7 @@ class Adaptive(Trainer):
         
         self.model.load_state_dict(checkpoint['model_state_dict'])
         if config['load_weights_only'] is False:
-            # self.sigma = checkpoint['sigma']
+            self.sigma = checkpoint['sigma']
             self.start_epoch = checkpoint['epoch'] + 1
             self.val_maes = checkpoint['val_maes']
             self.val_rmses = checkpoint['val_rmses']
@@ -186,7 +187,7 @@ class Adaptive(Trainer):
             self.dmg_lr_scheduler.load_state_dict(checkpoint['dmg_lr_scheduler_state_dict'])
             self.model_optimizer.load_state_dict(checkpoint['model_optimizer_state_dict'])
             self.model_lr_scheduler.load_state_dict(checkpoint['model_lr_scheduler_state_dict'])
-            # self.dmg.sigma.data = torch.tensor(self.sigma, device=self.device)
+            self.dmg.sigma.data = torch.tensor(self.sigma, device=self.device)
             logging.info(f"Checkpoint loaded!")
         else:
             logging.info(f"Model weights loaded!")

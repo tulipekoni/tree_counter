@@ -19,6 +19,24 @@ def cos_loss(output, target):
     loss = torch.mean(1 - F.cosine_similarity(output, target))
     return loss
 
+def modified_elu(x, alpha=1.0, threshold=15.0):
+    """
+    Modified ELU function for loss calculation.
+    
+    Args:
+    - x (torch.Tensor): Input tensor.
+    - alpha (float): Controls the steepness of the exponential growth.
+    - threshold (float): The point where the function starts growing exponentially.
+    
+    Returns:
+    - torch.Tensor: The output tensor after applying the modified ELU function.
+    """
+    return torch.where(
+        x <= threshold,
+        3 * torch.ones_like(x),  # Output 3 for x <= threshold
+        1 + alpha * (torch.exp(x - threshold) - 1)  # Exponential growth for x > threshold
+    )
+
 def combined_loss(output, target, coss_loss_multiplier=1.0):
     """
     Calculate loss for density maps where sum represents object count.

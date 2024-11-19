@@ -16,7 +16,7 @@ def main():
 
     torch.backends.cudnn.benchmark = True
     os.environ['CUDA_VISIBLE_DEVICES'] = config['device'].strip()  # set vis gpu
-    trainer = Static(config)
+    trainer = Adaptive(config)
     trainer.setup()
     trainer.train()
 

@@ -10,42 +10,36 @@ class DMG(nn.Module):
         self.gaussian_kernel = self.calculate_gaussian_kernel()
 
     def calculate_kernel_size(self, sigma):
-        kernel_size = int(6 * sigma) + 3
+        kernel_size = torch.ceil(6 * sigma + 3)
         if kernel_size % 2 == 0:
             kernel_size += 1
-        return kernel_size
+        return int(kernel_size.item())
 
     def calculate_gaussian_kernel(self):
         ax = torch.arange(-self.kernel_size // 2 + 1., self.kernel_size // 2 + 1., device=self.device)
         xx, yy = torch.meshgrid(ax, ax, indexing='ij')
-        kernel = torch.exp(-(xx**2 + yy**2) / (2. * self.sigma**2))
+        kernel = torch.exp(-(xx**2 + yy**2) / (2. * self.sigma.pow(2)))
         return kernel / torch.sum(kernel)
 
     def forward(self, batch_images, batch_labels):
-        # Recalculate kernel size and kernel if sigma has changed
-        if self.sigma.requires_grad:
-            self.kernel_size = self.calculate_kernel_size(self.sigma.item())
-            self.gaussian_kernel = self.calculate_gaussian_kernel()
-
-        # Create an empty density map for this image
         shape = batch_images.shape
-        padded_shape = (shape[0], 1, shape[2] + 2 * self.kernel_size, shape[3] + 2 * self.kernel_size)
-        density = torch.zeros(padded_shape, device=self.device) 
+        density = torch.zeros((shape[0], 1, shape[2], shape[3]), device=self.device)
         
-        # For each batch...
         for batch, labels in enumerate(batch_labels):
             if len(labels) == 0:
                 continue
             
-            # For each label
             for label in labels:
-                x = int(label[0] - self.kernel_size/2) + self.kernel_size
-                y = int(label[1] - self.kernel_size/2) + self.kernel_size
-                xmax = x + self.kernel_size
-                ymax = y + self.kernel_size
+                # Create coordinate grids centered at each point
+                x, y = label[0], label[1]
+                x_grid = torch.arange(0, shape[2], device=self.device).float()
+                y_grid = torch.arange(0, shape[3], device=self.device).float()
+                y_grid, x_grid = torch.meshgrid(y_grid, x_grid, indexing='ij')
+                
+                # Calculate Gaussian in a differentiable way
+                gaussian = torch.exp(-((x_grid - x)**2 + (y_grid - y)**2) / (2 * self.sigma**2))
+                gaussian = gaussian / gaussian.sum()
+                
+                density[batch, 0] += gaussian
 
-                density[batch, :, x:xmax, y:ymax] += self.gaussian_kernel
-        
-        # Remove padding from each batch density map    
-        density = density[:, :, self.kernel_size:-self.kernel_size, self.kernel_size:-self.kernel_size]
         return density
