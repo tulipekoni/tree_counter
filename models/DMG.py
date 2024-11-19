@@ -1,18 +1,13 @@
 import torch
 import torch.nn as nn
 
-class StaticRefiner(nn.Module):
-    def __init__(self, device, sigma=15):
-        super(StaticRefiner, self).__init__()
-        self.sigma = sigma
+class DMG(nn.Module):
+    def __init__(self, device, initial_sigma_value, requires_grad=True):
+        super(DMG, self).__init__()
         self.device = device
-        # Calculate kernel size based on sigma
-        self.kernel_size = self.calculate_kernel_size(sigma)
-        
-        ax = torch.arange(-self.kernel_size // 2 + 1., self.kernel_size // 2 + 1., device=self.device)
-        xx, yy = torch.meshgrid(ax, ax, indexing='ij')
-        kernel = torch.exp(-(xx**2 + yy**2) / (2. * self.sigma**2))
-        self.gaussian_kernel = kernel / torch.sum(kernel)
+        self.sigma = nn.Parameter(torch.tensor(initial_sigma_value, dtype=torch.float32, device=device), requires_grad=requires_grad)
+        self.kernel_size = self.calculate_kernel_size(self.sigma.item())
+        self.gaussian_kernel = self.calculate_gaussian_kernel()
 
     def calculate_kernel_size(self, sigma):
         kernel_size = int(6 * sigma) + 3
@@ -20,7 +15,18 @@ class StaticRefiner(nn.Module):
             kernel_size += 1
         return kernel_size
 
-    def forward(self,batch_images, batch_labels):
+    def calculate_gaussian_kernel(self):
+        ax = torch.arange(-self.kernel_size // 2 + 1., self.kernel_size // 2 + 1., device=self.device)
+        xx, yy = torch.meshgrid(ax, ax, indexing='ij')
+        kernel = torch.exp(-(xx**2 + yy**2) / (2. * self.sigma**2))
+        return kernel / torch.sum(kernel)
+
+    def forward(self, batch_images, batch_labels):
+        # Recalculate kernel size and kernel if sigma has changed
+        if self.sigma.requires_grad:
+            self.kernel_size = self.calculate_kernel_size(self.sigma.item())
+            self.gaussian_kernel = self.calculate_gaussian_kernel()
+
         # Create an empty density map for this image
         shape = batch_images.shape
         padded_shape = (shape[0], 1, shape[2] + 2 * self.kernel_size, shape[3] + 2 * self.kernel_size)

@@ -1,19 +1,15 @@
 import os
-import random
-import torch
-import numpy as np
 import cv2
+import torch
+import random
+import numpy as np
+from models.DMG import DMG
 from models.UNet import UNet
-from models.StaticRefiner import StaticRefiner
-from models.AdaptiveRefiner import AdaptiveRefiner
-from datasets.tree_counting_dataset import TreeCountingDataset
-from utils.arg_parser import parse_visualizer_args
 from utils.losses import combined_loss
+from utils.arg_parser import parse_visualizer_args
+from datasets.tree_counting_dataset import TreeCountingDataset
 
 def load_model(checkpoint_path, device):
-    model = UNet()
-    refiner = None
-    
     # Find the most recent .tar file in the model folder
     checkpoint_files = [f for f in os.listdir(checkpoint_path) if f.endswith('.tar')]
     if not checkpoint_files:
@@ -26,21 +22,17 @@ def load_model(checkpoint_path, device):
     checkpoint_path = os.path.join(checkpoint_path, latest_checkpoint)
     checkpoint = torch.load(checkpoint_path, map_location=device)
 
+    dmg = DMG(initial_sigma_value=checkpoint['sigma'])
+    dmg.to(device)
+    dmg.eval()
+    
+    model = UNet()
     model.load_state_dict(checkpoint['model_state_dict'])
     model.to(device)
     model.eval()
     
-    # If refiner state exists, load AdaptiveRefiner
-    if 'refiner_state_dict' in checkpoint:
-        refiner = AdaptiveRefiner(device=device)
-        refiner.load_state_dict(checkpoint['refiner_state_dict'])
-        refiner.to(device)
-        refiner.eval()
-    else:
-        refiner = StaticRefiner(device=device, sigma=15)
-        refiner.to(device)
     
-    return model, refiner
+    return model, dmg
 
 def main():
     # Parse command-line arguments
@@ -49,8 +41,8 @@ def main():
     # Setup device (GPU or CPU)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    # Load the model and refiner
-    model, refiner = load_model(args.model_dir, device)
+    # Load the model and dmg
+    model, dmg = load_model(args.model_dir, device)
 
     # Prepare dataset
     dataset = TreeCountingDataset(root_path=os.path.join(args.data_dir, 'test'), augment=False)
@@ -68,8 +60,8 @@ def main():
         with torch.no_grad():
             pred_density_map = model(image)
 
-        # Generate ground truth density map using StaticRefiner
-        gt_density_map = refiner(image, labels)
+        # Generate ground truth density map using dmg
+        gt_density_map = dmg(image, labels)
 
         # Calculate predicted count and ground truth count
         pred_count = pred_density_map.sum().item()

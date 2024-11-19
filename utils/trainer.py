@@ -19,6 +19,7 @@ class Trainer(ABC):
     def __init__(self, config):
         self.config = config
         
+        self.sigma = 15
         self.train_maes = []
         self.train_rmses = []
         self.train_losses = []

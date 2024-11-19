@@ -6,17 +6,16 @@ import numpy as np
 import torch.utils.data.dataloader
 from utils.trainer import Trainer
 from utils.helper import RunningAverageTracker
-from models.StaticRefiner import StaticRefiner
+from models.DMG import DMG
 
 class Static(Trainer):
     def __init__(self, config):
-        self.sigma = 15
         super().__init__(config)
 
     def setup(self):
+        self.dmg = DMG(device=self.device, initial_sigma_value=self.sigma, requires_grad=False)
+        self.dmg.to(self.device)
         super().setup()
-        self.refiner = StaticRefiner(device=self.device, sigma=self.sigma)
-        self.refiner.to(self.device)
         
     def train_epoch(self, epoch):
         epoch_loss = RunningAverageTracker()
@@ -24,7 +23,6 @@ class Static(Trainer):
         epoch_rmse = RunningAverageTracker()
         start_time = time.time()
         self.model.train() 
-        # No need to train refiner here since it returns just static kernels
 
         # Iterate over data
         for step, (batch_images, batch_labels, batch_names) in enumerate(self.dataloaders['train']):
@@ -35,10 +33,10 @@ class Static(Trainer):
             with torch.set_grad_enabled(True):
                 self.optimizer.zero_grad()
                 batch_pred_density_maps = self.model(batch_images) 
-                batch_gt_density_maps = self.refiner(batch_images, batch_labels)
+                batch_gt_density_maps = self.dmg(batch_images, batch_labels)
 
                 # Loss for step
-                loss = self.loss_function(batch_pred_density_maps, batch_gt_density_maps)
+                loss = self.loss_function(batch_pred_density_maps, batch_gt_density_maps, self.dmg.sigma.item())
                 loss.backward() 
                 self.optimizer.step()
 
@@ -73,7 +71,7 @@ class Static(Trainer):
 
             with torch.set_grad_enabled(False):
                 batch_pred_density_maps = self.model(batch_images)
-                batch_gt_density_maps = self.refiner(batch_images, batch_labels)
+                batch_gt_density_maps = self.dmg(batch_images, batch_labels)
 
                 # Compute loss
                 loss = self.loss_function(batch_pred_density_maps, batch_gt_density_maps)
@@ -98,7 +96,7 @@ class Static(Trainer):
     def save_checkpoint(self, epoch):
         checkpoint = {
             'epoch': epoch,
-            'sigma': self.sigma,
+            'sigma': self.dmg.sigma.item(),
             'val_maes': self.val_maes,
             'val_rmses': self.val_rmses,
             'val_losses': self.val_losses,

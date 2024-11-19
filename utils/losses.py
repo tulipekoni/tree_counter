@@ -19,7 +19,7 @@ def cos_loss(output, target):
     loss = torch.mean(1 - F.cosine_similarity(output, target))
     return loss
 
-def combined_loss(output, target):
+def combined_loss(output, target, coss_loss_multiplier=1.0):
     """
     Calculate loss for density maps where sum represents object count.
     """
@@ -35,7 +35,7 @@ def combined_loss(output, target):
     count_loss = torch.abs(pred_counts - true_counts).mean()
     
     # Optional: keep cosine similarity for structural similarity
-    cos_loss_val = cos_loss(output, target)
+    cos_loss_val = coss_loss_multiplier * cos_loss(output, target)
     
     # Combine with appropriate scaling
     total_loss = pixel_loss + count_loss + 1 * cos_loss_val
