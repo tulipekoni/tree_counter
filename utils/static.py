@@ -23,6 +23,8 @@ class Static(Trainer):
         epoch_rmse = RunningAverageTracker()
         start_time = time.time()
         self.model.train() 
+        
+        loss_components_sum = {'pixel_loss': 0, 'count_loss': 0, 'cos_loss': 0}
 
         # Iterate over data
         for step, (batch_images, batch_labels, batch_names) in enumerate(self.dataloaders['train']):
@@ -36,10 +38,14 @@ class Static(Trainer):
                 batch_gt_density_maps = self.dmg(batch_images, batch_labels)
 
                 # Loss for step
-                loss = self.loss_function(batch_pred_density_maps, batch_gt_density_maps, self.dmg.sigma.item())
+                loss, components = self.loss_function(batch_pred_density_maps, batch_gt_density_maps)
                 loss.backward() 
                 self.model_optimizer.step()
 
+                # Update component sums
+                for k, v in components.items():
+                    loss_components_sum[k] += v
+                
                 # The number of trees is total sum of all prediction pixels
                 batch_pred_counts = batch_pred_density_maps.sum(dim=(1, 2, 3)).detach()  
                 batch_differences = batch_pred_counts - batch_gt_count 
@@ -50,10 +56,24 @@ class Static(Trainer):
                 epoch_mae.update(torch.abs(batch_differences).sum().item(), batch_size)
                 epoch_rmse.update(torch.sum(batch_differences ** 2).item(), batch_size)
 
+
+                
+        # Calculate averages
+        num_batches = len(self.dataloaders['train'])
+        avg_components = {k: v/num_batches for k, v in loss_components_sum.items()}
+        total_loss = sum(avg_components.values())
+        
+        # Calculate percentages
+        loss_percentages = {k: (v/total_loss)*100 for k, v in avg_components.items()}
+
         average_loss = epoch_loss.get_average()
         average_mae = epoch_mae.get_average()
         average_rmse = torch.sqrt(torch.tensor(epoch_rmse.get_average())).item()
-        logging.info(f'Training: Loss: {average_loss:.2f}, RMSE: {average_rmse:.2f}, MAE: {average_mae:.2f}, Cost {time.time() - start_time:.1f} sec') 
+        logging.info(f'Training: Loss: {average_loss:.2f}, RMSE: {average_rmse:.2f}, MAE: {average_mae:.2f}, Cost {time.time() - start_time:.1f} sec\n'
+                    f'Loss Components:\n'
+                    f'  Pixel Loss: {avg_components["pixel_loss"]:.4f} ({loss_percentages["pixel_loss"]:.1f}%)\n'
+                    f'  Count Loss: {avg_components["count_loss"]:.4f} ({loss_percentages["count_loss"]:.1f}%)\n'
+                    f'  Cos Loss: {avg_components["cos_loss"]:.4f} ({loss_percentages["cos_loss"]:.1f}%)')
 
         return average_loss, average_rmse, average_mae
     
@@ -74,7 +94,7 @@ class Static(Trainer):
                 batch_gt_density_maps = self.dmg(batch_images, batch_labels)
 
                 # Compute loss
-                loss = self.loss_function(batch_pred_density_maps, batch_gt_density_maps)
+                loss, _ = self.loss_function(batch_pred_density_maps, batch_gt_density_maps)
 
                 # The number of trees is total sum of all prediction pixels
                 batch_pred_counts = batch_pred_density_maps.sum(dim=(1, 2, 3)).detach()
