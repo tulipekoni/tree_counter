@@ -70,7 +70,15 @@ def save_patches(patches, region_name, save_dir, is_val=False):
         data_patch_image.save(patch_save_path)
         
         # Find white pixels in the label (object positions)
-        object_positions = np.column_stack(np.where(label_patch == 255))
+        y_coords, x_coords = np.where(label_patch == 255)
+        # Stack coordinates in (x,y) order and ensure they're within patch bounds
+        object_positions = np.column_stack((x_coords, y_coords))
+        
+        # Verify coordinates are within patch bounds
+        patch_height, patch_width = data_patch.shape[:2]
+        mask = (object_positions[:, 0] >= 0) & (object_positions[:, 0] < patch_width) & \
+               (object_positions[:, 1] >= 0) & (object_positions[:, 1] < patch_height)
+        object_positions = object_positions[mask]
 
         # Save the object positions as a .npy file
         npy_save_path = patch_save_path.replace('.png', '.npy')

@@ -6,7 +6,7 @@ class DMG(nn.Module):
         super(DMG, self).__init__()
         self.device = device
         self.sigma = nn.Parameter(torch.tensor(initial_sigma_value, dtype=torch.float32, device=device), requires_grad=requires_grad)
-        self.kernel_size = self.calculate_kernel_size(self.sigma.item())
+        self.kernel_size = self.calculate_kernel_size(self.sigma)
         self.gaussian_kernel = self.calculate_gaussian_kernel()
 
     def calculate_kernel_size(self, sigma):
