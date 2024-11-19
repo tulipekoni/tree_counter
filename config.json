@@ -1,7 +1,7 @@
 {
     "save_dir": "./checkpoints",
     "data_dir": "./processed_data",
-    "resume": "./checkpoints/1117-172146",
+    "resume": "./checkpoints/alustus",
     "load_weights_only": true,
     "device": "0",
     "num_workers": 8,

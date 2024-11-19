@@ -41,7 +41,7 @@ This project implements a kernel-based density map generation method for dense o
 
 3. Preprocess the dataset:
    ```
-   python preprocess_dataset.py --origin_dir ./data --data_dir <path_to_processed_data>
+   python .utils/preprocess_dataset.py
    ```
 
 ## Pretrained model
@@ -76,7 +76,7 @@ The `config.json` file contains all the hyperparameters and settings for the mod
 
 ## Project Structure
 
-- `models/`: Contains the U-Net and Refiner model implementations
+- `models/`: Contains the U-Net and DMG model implementations
 - `datasets/`: Includes the TreeCountingDataset class
 - `utils/`: Helper functions and classes for training and evaluation
 - `train.py`: Main script for training the model
