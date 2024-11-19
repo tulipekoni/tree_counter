@@ -48,7 +48,7 @@ class Adaptive(Trainer):
                 batch_gt_density_maps = self.dmg(batch_images, batch_labels)
 
                 # Loss for step
-                loss = self.loss_function(batch_pred_density_maps, batch_gt_density_maps, self.dmg.sigma.item())
+                loss = self.loss_function(batch_pred_density_maps, batch_gt_density_maps, self.dmg.sigma.item()**2)
                 loss.backward() 
                 self.optimizer.step()
 

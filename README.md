@@ -41,7 +41,7 @@ This project implements a kernel-based density map generation method for dense o
 
 3. Preprocess the dataset:
    ```
-   python .utils/preprocess_dataset.py
+   python ./utils/preprocess_dataset.py
    ```
 
 ## Pretrained model
