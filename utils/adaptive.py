@@ -17,7 +17,6 @@ class Adaptive(Trainer):
         config = self.config
         self.dmg = DMG(device=self.device, initial_sigma_value=self.sigma, requires_grad=True)
         self.dmg.to(self.device)
-        self.dmg_training_start_epoch = 50
         super().setup()
         
         params = list(self.dmg.parameters())
@@ -43,8 +42,7 @@ class Adaptive(Trainer):
 
             with torch.set_grad_enabled(True):
                 self.model_optimizer.zero_grad()
-                if epoch >= self.dmg_training_start_epoch:
-                    self.dmg_optimizer.zero_grad()
+                self.dmg_optimizer.zero_grad()
                 
                 batch_pred_density_maps = self.model(batch_images) 
                 batch_gt_density_maps = self.dmg(batch_images, batch_labels)
@@ -58,8 +56,7 @@ class Adaptive(Trainer):
                     loss_components_sum[k] += v
                 
                 self.model_optimizer.step()
-                if epoch >= self.dmg_training_start_epoch:
-                    self.dmg_optimizer.step()
+                self.dmg_optimizer.step()
 
                 # The number of trees is total sum of all prediction pixels
                 batch_pred_counts = batch_pred_density_maps.sum(dim=(1, 2, 3)).detach()  
@@ -72,8 +69,7 @@ class Adaptive(Trainer):
                 epoch_rmse.update(torch.sum(batch_differences ** 2).item(), batch_size)
 
 
-        if epoch >= self.dmg_training_start_epoch:
-            self.dmg_lr_scheduler.step()
+        self.dmg_lr_scheduler.step()
         # Calculate averages
         num_batches = len(self.dataloaders['train'])
         avg_components = {k: v/num_batches for k, v in loss_components_sum.items()}
