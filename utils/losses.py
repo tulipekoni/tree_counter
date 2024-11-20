@@ -34,7 +34,7 @@ def modified_elu(x, alpha=1.0, threshold=20.0):
     return torch.where(
         x <= threshold,
         3 * torch.ones_like(x),  # Output 3 for x <= threshold
-        1 + alpha * (torch.exp(x - threshold) - 1)  # Exponential growth for x > threshold
+        3 + alpha * (torch.exp(x - threshold) - 1)  # Exponential growth for x > threshold
     )
 
 def combined_loss(output, target, coss_loss_multiplier=1.0):
