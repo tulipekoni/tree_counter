@@ -13,6 +13,7 @@ from torch.utils.data import DataLoader
 from torch.optim import lr_scheduler, Adam
 from utils.helper import ModelSaver, setlogger
 from datasets.tree_counting_dataset import TreeCountingDataset
+from utils.helper import ValidationTracker
 
 
 class Trainer(ABC):
@@ -140,8 +141,15 @@ class Trainer(ABC):
         return sum(queue) / len(queue)
 
     def train(self):
-        config = self.config        
+        config = self.config
         
+        # Initialize the ValidationTracker with the custom save checkpoint function
+        validation_tracker = ValidationTracker(
+            patience=config['patience'], 
+            verbose=True, 
+            save_checkpoint_callback=self.save_checkpoint
+        )
+
         for epoch in range(self.start_epoch, config['max_epoch']):
             logging.info('-'*5 + 'Epoch {}/{}'.format(epoch, config['max_epoch'] - 1) + '-'*5)
             
@@ -169,12 +177,12 @@ class Trainer(ABC):
 
             # Only save if we have enough samples for a meaningful moving average
             if len(self.val_mae_queue) >= self.moving_avg_window:
-                if val_score < self.best_val_score:
-                    logging.info(f'New best moving average score: {val_score:.4f} '
-                               f'(MAE: {moving_avg_mae:.4f}, RMSE: {moving_avg_rmse:.4f})')
-                    self.best_val_score = val_score
-                    self.save_checkpoint(epoch=epoch)
-    
+                validation_tracker(val_score, self.model, epoch)
+
+            if validation_tracker.early_stop:
+                logging.info(f'Early stopping at epoch {epoch}')
+                break
+
     def _update_graph(self, epoch):
         epochs = range(0, epoch + 1)
         

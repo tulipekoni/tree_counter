@@ -19,7 +19,7 @@ def cos_loss(output, target):
     loss = torch.mean(1 - F.cosine_similarity(output, target))
     return loss
 
-def modified_elu(x, alpha=1.0, threshold=15.0):
+def modified_elu(x, alpha=1.0, threshold=20.0):
     """
     Modified ELU function for loss calculation.
     

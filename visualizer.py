@@ -22,7 +22,7 @@ def load_model(checkpoint_path, device):
     checkpoint_path = os.path.join(checkpoint_path, latest_checkpoint)
     checkpoint = torch.load(checkpoint_path, map_location=device)
 
-    dmg = DMG(initial_sigma_value=checkpoint['sigma'])
+    dmg = DMG(device=device, initial_sigma_value=checkpoint['sigma'])
     dmg.to(device)
     dmg.eval()
     

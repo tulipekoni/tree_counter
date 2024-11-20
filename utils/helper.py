@@ -1,5 +1,6 @@
 import os
 import logging
+import numpy as np
 class ModelSaver(object):
     """handle the number of saved models"""
     def __init__(self, max_count):
@@ -49,3 +50,46 @@ def setlogger(path):
     consoleHandler = logging.StreamHandler()
     consoleHandler.setFormatter(logFormatter)
     logger.addHandler(consoleHandler)
+    
+class ValidationTracker:
+    def __init__(self, patience=10, verbose=False, delta=0, save_checkpoint_callback=None):
+        """
+        Args:
+            patience (int): How long to wait after last time validation loss improved.
+            verbose (bool): If True, prints a message for each validation loss improvement.
+            delta (float): Minimum change in the monitored quantity to qualify as an improvement.
+            save_checkpoint_callback (callable): Function to call for saving the model.
+        """
+        self.patience = patience
+        self.verbose = verbose
+        self.counter = 0
+        self.best_score = None
+        self.early_stop = False
+        self.val_score_min = np.inf
+        self.delta = delta
+        self.save_checkpoint_callback = save_checkpoint_callback
+
+    def __call__(self, val_score, model, epoch):
+        score = -val_score
+
+        if self.best_score is None:
+            self.best_score = score
+            self.save_checkpoint(val_score, epoch)
+        elif score < self.best_score + self.delta:
+            self.counter += 1
+            if self.verbose:
+                logging.info(f'EarlyStopping counter: {self.counter} out of {self.patience}')
+            if self.counter >= self.patience:
+                self.early_stop = True
+        else:
+            self.best_score = score
+            self.save_checkpoint(val_score, epoch)
+            self.counter = 0
+
+    def save_checkpoint(self, val_score, epoch):
+        '''Saves model when validation score decreases.'''
+        if self.verbose:
+            logging.info(f'Validation score improved ({self.val_score_min:.6f} --> {val_score:.6f}).  Saving model ...')
+        if self.save_checkpoint_callback:
+            self.save_checkpoint_callback(epoch)
+        self.val_score_min = val_score
