@@ -7,6 +7,7 @@ import torch.utils.data.dataloader
 from utils.trainer import Trainer
 from utils.helper import RunningAverageTracker
 from models.DMG import DMG
+from utils.losses import modified_elu
 
 class Static(Trainer):
     def __init__(self, config):
@@ -38,7 +39,7 @@ class Static(Trainer):
                 batch_gt_density_maps = self.dmg(batch_images, batch_labels)
 
                 # Loss for step
-                loss, components = self.loss_function(batch_pred_density_maps, batch_gt_density_maps)
+                loss, components = self.loss_function(batch_pred_density_maps, batch_gt_density_maps, modified_elu(self.dmg.sigma))
                 loss.backward() 
                 self.model_optimizer.step()
 
@@ -94,7 +95,7 @@ class Static(Trainer):
                 batch_gt_density_maps = self.dmg(batch_images, batch_labels)
 
                 # Compute loss
-                loss, _ = self.loss_function(batch_pred_density_maps, batch_gt_density_maps)
+                loss, _ = self.loss_function(batch_pred_density_maps, batch_gt_density_maps, modified_elu(self.dmg.sigma))
 
                 # The number of trees is total sum of all prediction pixels
                 batch_pred_counts = batch_pred_density_maps.sum(dim=(1, 2, 3)).detach()
