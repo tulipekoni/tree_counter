@@ -7,7 +7,7 @@ from utils.trainer import Trainer
 import torch.utils.data.dataloader
 from torch.optim import lr_scheduler, Adam
 from utils.helper import RunningAverageTracker
-from utils.losses import modified_elu
+from utils.losses import modified_softmax
 
 class Adaptive(Trainer):
     def __init__(self, config):
@@ -48,7 +48,7 @@ class Adaptive(Trainer):
                 batch_gt_density_maps = self.dmg(batch_images, batch_labels)
 
                 # Loss for step
-                loss, components = self.loss_function(batch_pred_density_maps, batch_gt_density_maps, modified_elu(self.dmg.sigma))
+                loss, components = self.loss_function(batch_pred_density_maps, batch_gt_density_maps, modified_softmax(self.dmg.sigma))
                 loss.backward() 
                 
                 # Update component sums
@@ -107,7 +107,7 @@ class Adaptive(Trainer):
                 batch_gt_density_maps = self.dmg(batch_images, batch_labels)
 
                 # Compute loss
-                loss, _ = self.loss_function(batch_pred_density_maps, batch_gt_density_maps, modified_elu(self.dmg.sigma))
+                loss, _ = self.loss_function(batch_pred_density_maps, batch_gt_density_maps, modified_softmax(self.dmg.sigma))
 
                 # The number of trees is total sum of all prediction pixels
                 batch_pred_counts = batch_pred_density_maps.sum(dim=(1, 2, 3)).detach()

@@ -166,3 +166,4 @@ data/
 checkpoints/
 phases/
 processed_data*
+*.png

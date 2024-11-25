@@ -19,23 +19,19 @@ def cos_loss(output, target):
     loss = torch.mean(1 - F.cosine_similarity(output, target))
     return loss
 
-def modified_elu(x, alpha=1.0, threshold=20.0):
+def modified_softmax(x, t=20.0, b=3.0):
     """
-    Modified ELU function for loss calculation.
+    Modified softmax function that applies softplus with an offset.
     
     Args:
-    - x (torch.Tensor): Input tensor.
-    - alpha (float): Controls the steepness of the exponential growth.
-    - threshold (float): The point where the function starts growing exponentially.
+    - x (torch.Tensor): Input tensor
+    - t (float): Threshold/offset value
+    - b (float): Base offset value added to the result
     
     Returns:
-    - torch.Tensor: The output tensor after applying the modified ELU function.
+    - torch.Tensor: The output tensor after applying softplus with offset
     """
-    return torch.where(
-        x <= threshold,
-        3 * torch.ones_like(x),  # Output 3 for x <= threshold
-        3 + alpha * (torch.exp(x - threshold) - 1)  # Exponential growth for x > threshold
-    )
+    return b + torch.log(1 + torch.exp(x - t))
 
 def combined_loss(output, target, coss_loss_multiplier=1.0):
     """

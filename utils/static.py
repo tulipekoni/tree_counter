@@ -7,7 +7,6 @@ import torch.utils.data.dataloader
 from utils.trainer import Trainer
 from utils.helper import RunningAverageTracker
 from models.DMG import DMG
-from utils.losses import modified_elu
 
 class Static(Trainer):
     def __init__(self, config):
