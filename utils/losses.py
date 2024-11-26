@@ -33,16 +33,17 @@ def modified_softmax(x, t=20.0, b=6.0):
     """
     return b + torch.log(1 + torch.exp(x - t))
 
-def combined_loss(output, target, coss_loss_multiplier=1.0):
+def combined_loss(output, target):
     """
     Calculate loss for density maps where sum represents object count.
     Returns both total loss and individual components for logging.
     """
-    
     pixel_multiplier = 0.3
+    cos_multiplier = 6
+    
     batch_size = output.shape[0]
     
-    pixel_loss = torch.abs(output - target).sum() / batch_size
+    pixel_loss = pixel_multiplier * (torch.abs(output - target).sum() / batch_size)
     
     # Count prediction error
     pred_counts = output.sum(dim=(1,2,3))
@@ -50,13 +51,13 @@ def combined_loss(output, target, coss_loss_multiplier=1.0):
     count_loss = torch.abs(pred_counts - true_counts).mean()
     
     # Cosine similarity for structural similarity
-    cos_loss_val = cos_loss(output, target)
+    cos_loss_val = cos_multiplier * cos_loss(output, target)
     
     # Calculate total loss
-    total_loss = pixel_loss + count_loss + coss_loss_multiplier * cos_loss_val
+    total_loss = pixel_loss + count_loss * cos_loss_val
     
     return total_loss, {
-        'pixel_loss': (pixel_multiplier * pixel_loss).item(),
+        'pixel_loss': pixel_loss.item(),
         'count_loss': count_loss.item(),
-        'cos_loss': (coss_loss_multiplier * cos_loss_val).item()
+        'cos_loss': cos_loss_val.item()
     }

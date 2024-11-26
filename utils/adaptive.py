@@ -51,6 +51,11 @@ class Adaptive(Trainer):
                 loss, components = self.loss_function(batch_pred_density_maps, batch_gt_density_maps, modified_softmax(self.dmg.sigma))
                 loss.backward() 
                 
+                # Scale DMG sigma gradients
+                sigma_scale = 10.0  
+                if self.dmg.sigma.grad is not None:
+                    self.dmg.sigma.grad *= sigma_scale
+                
                 # Update component sums
                 for k, v in components.items():
                     loss_components_sum[k] += v
