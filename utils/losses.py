@@ -19,19 +19,6 @@ def cos_loss(output, target):
     loss = torch.mean(1 - F.cosine_similarity(output, target))
     return loss
 
-def modified_softmax(x, t=20.0, b=6.0):
-    """
-    Modified softmax function that applies softplus with an offset.
-    
-    Args:
-    - x (torch.Tensor): Input tensor
-    - t (float): Threshold/offset value
-    - b (float): Base offset value added to the result
-    
-    Returns:
-    - torch.Tensor: The output tensor after applying softplus with offset
-    """
-    return b + torch.log(1 + torch.exp(x - t))
 
 def combined_loss(output, target):
     """
