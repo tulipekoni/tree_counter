@@ -19,7 +19,7 @@ def cos_loss(output, target):
     loss = torch.mean(1 - F.cosine_similarity(output, target))
     return loss
 
-def modified_softmax(x, t=20.0, b=3.0):
+def modified_softmax(x, t=20.0, b=6.0):
     """
     Modified softmax function that applies softplus with an offset.
     
@@ -38,10 +38,11 @@ def combined_loss(output, target, coss_loss_multiplier=1.0):
     Calculate loss for density maps where sum represents object count.
     Returns both total loss and individual components for logging.
     """
+    
+    pixel_multiplier = 0.3
     batch_size = output.shape[0]
     
-    # RMSE calculation
-    pixel_loss = torch.sqrt(torch.mean((output - target) ** 2))
+    pixel_loss = torch.abs(output - target).sum() / batch_size
     
     # Count prediction error
     pred_counts = output.sum(dim=(1,2,3))
@@ -55,7 +56,7 @@ def combined_loss(output, target, coss_loss_multiplier=1.0):
     total_loss = pixel_loss + count_loss + coss_loss_multiplier * cos_loss_val
     
     return total_loss, {
-        'pixel_loss': pixel_loss.item(),
+        'pixel_loss': (pixel_multiplier * pixel_loss).item(),
         'count_loss': count_loss.item(),
         'cos_loss': (coss_loss_multiplier * cos_loss_val).item()
     }
