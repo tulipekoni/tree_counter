@@ -40,11 +40,8 @@ def combined_loss(output, target, coss_loss_multiplier=1.0):
     """
     batch_size = output.shape[0]
     
-    # MSE focused on non-zero regions
-    # mse_criterion = MSELoss(reduction='sum')
-    # pixel_loss = mse_criterion(output, target) / batch_size
-    
-    pixel_loss = torch.abs(output - target).sum() / batch_size
+    # RMSE calculation
+    pixel_loss = torch.sqrt(torch.mean((output - target) ** 2))
     
     # Count prediction error
     pred_counts = output.sum(dim=(1,2,3))
