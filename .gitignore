@@ -165,5 +165,6 @@ cython_debug/
 data/
 checkpoints/
 phases/
+new_phases/
 processed_data*
 *.png

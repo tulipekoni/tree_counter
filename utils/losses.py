@@ -25,8 +25,8 @@ def combined_loss(output, target):
     Calculate loss for density maps where sum represents object count.
     Returns both total loss and individual components for logging.
     """
-    pixel_multiplier = 0.2
-    cos_multiplier = 6
+    pixel_multiplier = 0.3
+    cos_multiplier = 2
     
     batch_size = output.shape[0]
     
