@@ -117,6 +117,6 @@ if __name__ == '__main__':
         is_val_split = regions[region_name] == 'train'
         
         print(f'Processing region {region_name} ({regions[region_name]})...')
-        process_and_save(data_columns[i], label_columns[i], region_name, save_dir, patch_size=args.block_size, max_images=args.max_images, is_val_split=is_val_split)
+        process_and_save(data_columns[i], label_columns[i], region_name, save_dir, patch_size=args.subimage_size, max_images=args.max_images, is_val_split=is_val_split)
     
     print("Processing complete.")

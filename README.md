@@ -21,8 +21,7 @@ This project implements density map based method for dense object counting, spec
 2. Run the setup script:
 
    ```bash
-   chmod +x startup.sh
-   ./startup.sh
+   sh ./startup.sh
    ```
 
    This script will:
