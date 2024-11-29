@@ -49,9 +49,15 @@ def combined_loss(output, target, sigma=None):
     # Calculate total loss
     total_loss = pixel_loss + count_loss + cos_loss_val + sigma_penalty
     
-    return total_loss, {
+    # Create base loss components dictionary
+    loss_components = {
         'pixel_loss': pixel_loss.item(),
         'count_loss': count_loss.item(),
         'cos_loss': cos_loss_val.item(),
-        'sigma_penalty': sigma_penalty.item()  
     }
+    
+    # Only add sigma_penalty to dictionary if sigma was provided
+    if sigma is not None:
+        loss_components['sigma_penalty'] = sigma_penalty.item()
+    
+    return total_loss, loss_components
