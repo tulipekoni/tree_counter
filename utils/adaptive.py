@@ -31,7 +31,7 @@ class Adaptive(Trainer):
         self.model.train() 
         self.dmg.train() 
 
-        loss_components_sum = {'pixel_loss': 0, 'count_loss': 0, 'cos_loss': 0}
+        loss_components_sum = {'pixel_loss': 0, 'count_loss': 0, 'cos_loss': 0, 'sigma_penalty': 0}
         
         # Iterate over data
         for step, (batch_images, batch_labels, batch_names) in enumerate(self.dataloaders['train']):
@@ -47,7 +47,7 @@ class Adaptive(Trainer):
                 batch_gt_density_maps = self.dmg(batch_images, batch_labels)
 
                 # Loss for step
-                loss, components = self.loss_function(batch_pred_density_maps, batch_gt_density_maps)
+                loss, components = self.loss_function(batch_pred_density_maps, batch_gt_density_maps, self.dmg.sigma)
                 loss.backward() 
                 
                 # Scale DMG sigma gradients
@@ -89,7 +89,8 @@ class Adaptive(Trainer):
                     f'Loss Components (%):\n'
                     f'  Pixel Loss: {avg_components["pixel_loss"]:.4f} ({loss_percentages["pixel_loss"]:.1f}%)\n'
                     f'  Count Loss: {avg_components["count_loss"]:.4f} ({loss_percentages["count_loss"]:.1f}%)\n'
-                    f'  Cos Loss: {avg_components["cos_loss"]:.4f} ({loss_percentages["cos_loss"]:.1f}%)')
+                    f'  Cos Loss: {avg_components["cos_loss"]:.4f} ({loss_percentages["cos_loss"]:.1f}%)\n'
+                    f'  Sigma Loss: {avg_components["sigma_penalty"]:.4f} ({loss_percentages["sigma_penalty"]:.1f}%)')
 
         return average_loss, average_rmse, average_mae
     
@@ -111,7 +112,7 @@ class Adaptive(Trainer):
                 batch_gt_density_maps = self.dmg(batch_images, batch_labels)
 
                 # Compute loss
-                loss, _ = self.loss_function(batch_pred_density_maps, batch_gt_density_maps)
+                loss, _ = self.loss_function(batch_pred_density_maps, batch_gt_density_maps, self.dmg.sigma)
 
                 # The number of trees is total sum of all prediction pixels
                 batch_pred_counts = batch_pred_density_maps.sum(dim=(1, 2, 3)).detach()

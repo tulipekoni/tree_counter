@@ -20,7 +20,7 @@ def cos_loss(output, target):
     return loss
 
 
-def combined_loss(output, target):
+def combined_loss(output, target, sigma=None):
     """
     Calculate loss for density maps where sum represents object count.
     Returns both total loss and individual components for logging.
@@ -31,20 +31,27 @@ def combined_loss(output, target):
     batch_size = output.shape[0]
     
     pixel_loss = pixel_multiplier * (torch.abs(output - target).sum() / batch_size)
-    
+
     # Count prediction error
     pred_counts = output.sum(dim=(1,2,3))
     true_counts = target.sum(dim=(1,2,3))
     count_loss = torch.abs(pred_counts - true_counts).mean()
-    
+
     # Cosine similarity for structural similarity
     cos_loss_val = cos_multiplier * cos_loss(output, target)
     
+    # Modify sigma penalty handling
+    sigma_penalty = 0
+    if sigma is not None:
+        sigma_weight = 0.01
+        sigma_penalty = sigma_weight * sigma.pow(2).mean()  # Calculate mean of squared values
+    
     # Calculate total loss
-    total_loss = pixel_loss + count_loss * cos_loss_val
+    total_loss = pixel_loss + count_loss + cos_loss_val + sigma_penalty
     
     return total_loss, {
         'pixel_loss': pixel_loss.item(),
         'count_loss': count_loss.item(),
-        'cos_loss': cos_loss_val.item()
+        'cos_loss': cos_loss_val.item(),
+        'sigma_penalty': sigma_penalty.item()  
     }
