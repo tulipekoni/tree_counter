@@ -11,14 +11,7 @@ This project implements density map based method for dense object counting, spec
 
 ## Installation & Setup
 
-1. Clone the repository:
-
-   ```bash
-   git clone https://github.com/your-username/kernel-based-density-map.git
-   cd kernel-based-density-map
-   ```
-
-2. Run the setup script:
+1. Run the setup script:
 
    ```bash
    sh ./startup.sh
@@ -33,7 +26,7 @@ This project implements density map based method for dense object counting, spec
 
 ## Pretrained model
 
-The pretrained models for each phase referenced in the masters thesis can be downloaded from [GoogleDrive](https://drive.google.com/drive/folders/1TaY5I1eHIt7pm2YBfqw4BfnpX2l3Bof4?usp=sharing).
+The pretrained models are included in the ./phases directory.
 
 ## Training
 
@@ -59,7 +52,7 @@ python test.py --model_folder ./path_to_model_folder
 
 ## Configuration
 
-The `config.json` file contains all the hyperparameters and settings for the model. You can modify this file to change the model's behavior. Key parameters include:
+The `config.json` file contains all the hyperparameters and settings for the model. You can modify this file to change the model's behavior.
 
 ## Project Structure
 
@@ -69,16 +62,3 @@ The `config.json` file contains all the hyperparameters and settings for the mod
 - `train.py`: Main script for training the model
 - `test.py`: Script for evaluating the model on the test set
 - `visualizer.py`: Script for visualizing density maps
-
-## Citation
-
-If you use this code in your research, please cite:
-
-```
-@article{your-paper,
-title={Kernel-based Density Map Generation for Dense Object Counting},
-author={Your Name},
-journal={Your Journal},
-year={2024}
-}
-```
