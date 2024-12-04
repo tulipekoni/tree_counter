@@ -44,7 +44,7 @@ def combined_loss(output, target, sigma=None):
     sigma_penalty = 0
     if sigma is not None:
         sigma_weight = 0.01
-        sigma_penalty = sigma_weight * sigma.pow(2).mean()  # Calculate mean of squared values
+        sigma_penalty = sigma_weight * sigma.pow(2).mean() 
     
     # Calculate total loss
     total_loss = pixel_loss + count_loss + cos_loss_val + sigma_penalty

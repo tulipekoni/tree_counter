@@ -1,29 +1,11 @@
 import os
 import torch
 import numpy as np
-from models.UNet import UNet
 from torch.utils.data import DataLoader
+from utils.model_loader import load_weights
 from utils.arg_parser import parse_test_args
 from utils.helper import RunningAverageTracker
 from datasets.tree_counting_dataset import TreeCountingDataset
-
-
-def load_model(checkpoint_path, device):
-    model = UNet()
-    
-    # Find the most recent .tar file in the resume folder
-    checkpoint_files = [f for f in os.listdir(checkpoint_path) if f.endswith('.tar')]
-    if not checkpoint_files:
-        raise FileNotFoundError(f"No .tar checkpoint files found in {checkpoint_path}")
-    
-    latest_checkpoint = max(checkpoint_files, key=lambda f: os.path.getmtime(os.path.join(checkpoint_path, f)))
-    checkpoint_path = os.path.join(checkpoint_path, latest_checkpoint)
-    checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)
-    
-    model.load_state_dict(checkpoint['model_state_dict'])
-    model.to(device)
-    model.eval()
-    return model
 
 def test_model(model, dataloader, device):
     test_mae = RunningAverageTracker()
@@ -54,7 +36,7 @@ def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # Load model
-    model = load_model(args.model_dir, device)
+    model, _ = load_weights(args.model_dir, device)
 
     def filter_A(filename):
         return filename.startswith("A_")

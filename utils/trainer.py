@@ -11,9 +11,9 @@ from abc import ABC, abstractmethod
 from utils.losses import combined_loss
 from torch.utils.data import DataLoader
 from torch.optim import lr_scheduler, Adam
+from utils.helper import ValidationTracker
 from utils.helper import ModelSaver, setlogger
 from datasets.tree_counting_dataset import TreeCountingDataset
-from utils.helper import ValidationTracker
 
 
 class Trainer(ABC):
@@ -46,7 +46,7 @@ class Trainer(ABC):
             json.dump(config, f, indent=4)
 
         # Add moving average window size to config with default value
-        self.moving_avg_window = config.get('moving_avg_window', 5)
+        self.moving_avg_window = config['moving_avg_window']
         
         # Initialize moving average queues
         self.val_mae_queue = []
@@ -57,8 +57,8 @@ class Trainer(ABC):
         self.best_val_rmse = np.inf
         
         # Add weights for the metrics
-        self.mae_weight = config.get('mae_weight', 0.5)
-        self.rmse_weight = config.get('rmse_weight', 0.5)
+        self.mae_weight = config['mae_weight']
+        self.rmse_weight = config['rmse_weight']
         
         
         # Setup device (GPU or CPU)
@@ -110,7 +110,6 @@ class Trainer(ABC):
         # Model setup
         self.model = UNet()
         self.model.to(self.device)
-        
         self.loss_function = combined_loss
                 
         # Optimizer setup

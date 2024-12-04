@@ -1,12 +1,15 @@
-# Code adapted from Buda et al. (2019) repository:
-# https://doi.org/10.1016/j.compbiomed.2019.05.002
-
-from collections import OrderedDict
-
 import torch
 import torch.nn as nn
+from collections import OrderedDict
+
 
 class UNet(nn.Module):
+    """
+    U-Net model for image segmentation.
+
+    Code adapted from Buda et al. (2019) repository:
+    https://doi.org/10.1016/j.compbiomed.2019.05.002
+    """
 
     def __init__(self, in_channels=3, out_channels=1, init_features=32):
         super(UNet, self).__init__()

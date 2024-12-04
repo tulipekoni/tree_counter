@@ -2,11 +2,11 @@ import os
 import time
 import torch
 import logging
-import numpy as np
-import torch.utils.data.dataloader
-from utils.trainer import Trainer
-from utils.helper import RunningAverageTracker
 from models.DMG import DMG
+from utils.trainer import Trainer
+import torch.utils.data.dataloader
+from utils.model_loader import load_weights
+from utils.helper import RunningAverageTracker
 
 class Static(Trainer):
     def __init__(self, config):
@@ -140,30 +140,41 @@ class Static(Trainer):
     def load_checkpoint(self):
         config = self.config
         
-        # Find the most recent .tar file in the resume folder
-        checkpoint_files = [f for f in os.listdir(config['resume']) if f.endswith('.tar')]
-        if not checkpoint_files:
-            raise FileNotFoundError(f"No .tar checkpoint files found in {config['resume']}")
         
-        latest_checkpoint = max(checkpoint_files, key=lambda f: os.path.getmtime(os.path.join(config['resume'], f)))
-        checkpoint_path = os.path.join(config['resume'], latest_checkpoint)
-        checkpoint = torch.load(checkpoint_path, map_location=self.device, weights_only=False)
+        # Load model weights and sigma
+        model, sigma = load_weights(config['resume'], self.device)
         
-        self.sigma = checkpoint['sigma'] + 1
-        self.start_epoch = checkpoint['epoch'] + 1
-        self.val_maes = checkpoint['val_maes']
-        self.val_rmses = checkpoint['val_rmses']
-        self.val_losses = checkpoint['val_losses']
-        self.train_maes = checkpoint['train_maes']
-        self.train_rmses = checkpoint['train_rmses']
-        self.train_losses = checkpoint['train_losses']
+        self.model = model
+        self.sigma = sigma
+        self.dmg.sigma.data = torch.tensor(self.sigma, device=self.device)
         
-        self.best_val_rmse = checkpoint['best_val_rmse']
-        self.best_val_mae = checkpoint['best_val_mae']
-        
-        
-        self.model.load_state_dict(checkpoint['model_state_dict'])
-        self.model_optimizer.load_state_dict(checkpoint['model_optimizer_state_dict'])
-        self.model_lr_scheduler.load_state_dict(checkpoint['model_lr_scheduler_state_dict'])
+        if not config.get('load_weights_only', False):
+            # Find the most recent .tar file in the resume folder
+            checkpoint_files = [f for f in os.listdir(config['resume']) if f.endswith('.tar')]
+            if not checkpoint_files:
+                raise FileNotFoundError(f"No .tar checkpoint files found in {config['resume']}")
+            
+            latest_checkpoint = max(checkpoint_files, key=lambda f: os.path.getmtime(os.path.join(config['resume'], f)))
+            checkpoint_path = os.path.join(config['resume'], latest_checkpoint)
+            checkpoint = torch.load(checkpoint_path, map_location=self.device)
+            
+            # Load the rest of the training state
+            self.start_epoch = checkpoint['epoch'] + 1
+            self.val_maes = checkpoint['val_maes']
+            self.val_rmses = checkpoint['val_rmses']
+            self.val_losses = checkpoint['val_losses']
+            self.train_maes = checkpoint['train_maes']
+            self.train_rmses = checkpoint['train_rmses']
+            self.train_losses = checkpoint['train_losses']
 
-        logging.info(f"Checkpoint loaded!")
+            self.best_val_rmse = checkpoint['best_val_rmse']
+            self.best_val_mae = checkpoint['best_val_mae']
+
+            self.dmg_optimizer.load_state_dict(checkpoint['dmg_optimizer_state_dict'])
+            self.dmg_lr_scheduler.load_state_dict(checkpoint['dmg_lr_scheduler_state_dict'])
+            self.model_optimizer.load_state_dict(checkpoint['model_optimizer_state_dict'])
+            self.model_lr_scheduler.load_state_dict(checkpoint['model_lr_scheduler_state_dict'])
+            
+            logging.info(f"Checkpoint loaded!")
+        else:
+            logging.info(f"Model weights loaded!")

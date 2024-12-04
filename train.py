@@ -15,7 +15,7 @@ def main():
         config = override_config(config, overrides)
 
     torch.backends.cudnn.benchmark = True
-    os.environ['CUDA_VISIBLE_DEVICES'] = config['device'].strip()  # set vis gpu
+    os.environ['CUDA_VISIBLE_DEVICES'] = config['device'].strip()
     trainer = Adaptive(config)
     trainer.setup()
     trainer.train()
